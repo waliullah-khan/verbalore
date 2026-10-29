@@ -8,8 +8,8 @@ Verbalore researches what your market is posting about, writes the script in you
 |---|---|
 | Track | _Antler Agents (fill in before submitting)_ |
 | Demo video (Loom) | _add link_ |
-| Deployed URL | _add link, or run it locally with the steps below_ |
-| Team | _names, roles, contacts (up to 5)_ |
+| Deployed URL | https://verbalore.vercel.app |
+| Team | Wali Ullah Khan | wali@wallai.org | https://linkedin.com/in/waliullah-khan |
 
 ## What it does
 
