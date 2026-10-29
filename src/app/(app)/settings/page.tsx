@@ -4,6 +4,7 @@ import { currentWorkspace } from "@/lib/workspace";
 import { connectUrl, connectedPlatforms, hasUploadPost, profileName } from "@/lib/publish/uploadpost";
 import { sendDigest } from "@/lib/email/digest";
 import { hasResend } from "@/lib/email/resend";
+import { isAdmin } from "@/lib/access";
 
 async function saveProfile(formData: FormData) {
   "use server";
@@ -40,7 +41,8 @@ const ready = (ok: boolean) => (
 );
 
 export default async function Settings({ searchParams }: { searchParams: { digest?: string } }) {
-  const { ws } = await currentWorkspace();
+  const { ws, user } = await currentWorkspace();
+  const admin = isAdmin(user.email);
   const connected = hasUploadPost() ? await connectedPlatforms(profileName(ws.id)) : [];
 
   const services: [string, boolean, string][] = [
@@ -83,14 +85,21 @@ export default async function Settings({ searchParams }: { searchParams: { diges
 
       <section className="card space-y-3">
         <p className="eyebrow">Social accounts</p>
-        <p className="muted text-sm">Connect the accounts you post to. Posting goes through Upload-Post to up to 15 platforms.</p>
-        <form action={connectSocial}><button className="btn btn-ghost" disabled={!hasUploadPost()}>Connect accounts</button></form>
+        <p className="muted text-sm">Connect the accounts you post to, then publish to up to 15 platforms from the Library.</p>
+        <form action={connectSocial}><button className="btn btn-ghost" disabled={!hasUploadPost() || ws.is_demo}>Connect accounts</button></form>
+        {ws.is_demo && <p className="muted text-xs">Connecting accounts is turned off in the demo. Posting is simulated.</p>}
         {connected.length > 0 && <div className="flex flex-wrap gap-2">{connected.map((c) => <span key={c} className="chip">{c}</span>)}</div>}
-        {!hasUploadPost() && <p className="muted text-xs">Set UPLOAD_POST_API_KEY to enable.</p>}
+        {admin && !hasUploadPost() && <p className="muted text-xs">Set UPLOAD_POST_API_KEY to enable.</p>}
       </section>
 
+      <section className="card space-y-2">
+        <p className="eyebrow">Your allowance</p>
+        <p className="muted text-sm">Every workspace gets a daily allowance of idea runs, signal scans and edits, and a few video styles. Bringing your own provider keys to go beyond it is on the way.</p>
+      </section>
+
+      {admin && (
       <section className="card">
-        <p className="eyebrow">Connections</p>
+        <p className="eyebrow">Connections (admin)</p>
         <ul className="mt-3 divide-y" style={{ borderColor: "var(--line)" }}>
           {services.map(([name, ok, what]) => (
             <li key={name} className="flex items-center justify-between gap-4 py-3 text-sm">
@@ -100,6 +109,7 @@ export default async function Settings({ searchParams }: { searchParams: { diges
           ))}
         </ul>
       </section>
+      )}
     </div>
   );
 }

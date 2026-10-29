@@ -113,9 +113,23 @@ export default async function Signals({ searchParams }: { searchParams: { added?
                   <span className="font-medium">{a.name}</span>
                   {a.source === "place" ? <span className="muted"> · city permit records</span> : a.domain ? <span className="muted"> · {a.domain}</span> : <span className="muted"> · no website found</span>}
                   <p className="muted text-xs">
-                    {a.source === "manual" ? "Added by you" : a.source === "place" ? "Place" : "Sample CRM"} · scanned {ago(a.last_scanned_at)} · <Link href={`/signals?only=${a.id}`} className="underline underline-offset-2">{countFor(a.id)} signal{countFor(a.id) === 1 ? "" : "s"}</Link>
+                    {a.source === "manual" ? "Added by you" : a.source === "place" ? "Place" : "Sample CRM"} · scanned {ago(a.last_scanned_at)}
                     {board && ` · job board: ${board.provider}`}
                   </p>
+                  <details className="group mt-1">
+                    <summary className="cursor-pointer text-xs font-bold underline underline-offset-2">{countFor(a.id)} signal{countFor(a.id) === 1 ? "" : "s"}</summary>
+                    <ul className="mt-2 grid gap-2">
+                      {rows.filter((r) => r.account.id === a.id && r.status !== "sample").slice(0, 12).map((r) => (
+                        <li key={r.id} className="rounded-xl border p-3" style={{ borderColor: "var(--line)", background: "var(--paper)" }}>
+                          <span className="chip">{SOURCE_LABEL[r.source] ?? r.source}</span>
+                          <p className="mt-1 font-bold">{r.headline}</p>
+                          {r.summary && <p className="muted text-xs">{r.summary}</p>}
+                          {r.evidence_url && <a href={r.evidence_url} target="_blank" rel="noopener noreferrer" className="text-xs font-bold underline underline-offset-2">See the source</a>}
+                        </li>
+                      ))}
+                      {countFor(a.id) === 0 && <li className="muted text-xs">Nothing found yet. Press Scan.</li>}
+                    </ul>
+                  </details>
                 </div>
                 <form action={scanOne}>
                   <input type="hidden" name="id" value={a.id} />

@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { serviceClient } from "../src/lib/supabase/service";
 import { handlers, RENDER_KINDS, type Job } from "./handlers";
+import { isAdmin } from "../src/lib/access";
 
 const POLL = Number(process.env.POLL_INTERVAL_MS ?? 2000);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -10,9 +11,24 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const LIMIT = Number(process.env.JOB_LIMIT_PER_HOUR ?? 0);
 const COSTLY = ["generate_ideas", "scan_signals", "render_video", "render_note", "publish_video"];
 
-async function overLimit(db: SupabaseClient, job: Job): Promise<string | null> {
-  if (!LIMIT || !job.workspace_id || !COSTLY.includes(job.kind)) return null;
-  const since = new Date(Date.now() - 3_600_000).toISOString();
+const DAILY = Number(process.env.FREE_DAILY_JOBS ?? 0);
+const adminWorkspace = new Map<string, boolean>();
+
+// Admins are never limited. Everyone else, the public demo included, gets a daily allowance.
+async function isAdminWorkspace(db: SupabaseClient, workspaceId: string) {
+  const known = adminWorkspace.get(workspaceId);
+  if (known !== undefined) return known;
+  const { data: ws } = await db.from("vl_workspaces").select("owner_id").eq("id", workspaceId).maybeSingle();
+  let admin = false;
+  if (ws?.owner_id) {
+    const { data } = await db.auth.admin.getUserById(ws.owner_id);
+    admin = isAdmin(data.user?.email);
+  }
+  adminWorkspace.set(workspaceId, admin);
+  return admin;
+}
+
+async function usedSince(db: SupabaseClient, job: Job, ms: number) {
   const { count } = await db
     .from("vl_jobs")
     .select("id", { count: "exact", head: true })
@@ -20,8 +36,16 @@ async function overLimit(db: SupabaseClient, job: Job): Promise<string | null> {
     .in("kind", COSTLY)
     .in("status", ["running", "done"])
     .neq("id", job.id)
-    .gte("locked_at", since);
-  return (count ?? 0) >= LIMIT ? `This demo allows ${LIMIT} background jobs an hour and that limit was reached. Try again in a while.` : null;
+    .gte("locked_at", new Date(Date.now() - ms).toISOString());
+  return count ?? 0;
+}
+
+async function overLimit(db: SupabaseClient, job: Job): Promise<string | null> {
+  if (!job.workspace_id || !COSTLY.includes(job.kind)) return null;
+  if (await isAdminWorkspace(db, job.workspace_id)) return null;
+  if (LIMIT && (await usedSince(db, job, 3_600_000)) >= LIMIT) return `This workspace can run ${LIMIT} background jobs an hour and that limit was reached. Try again in a while.`;
+  if (DAILY && (await usedSince(db, job, 86_400_000)) >= DAILY) return `You have used today’s ${DAILY} included runs. Come back tomorrow, or add your own keys to keep going.`;
+  return null;
 }
 
 async function lane(name: string, kinds: () => string[]) {

@@ -82,7 +82,7 @@ async function writeWithModel(ws: Workspace, profile: Profile, pb: Playbook, voi
     'Posts from platform "permits" are official city records. When you use one of their numbers, quote it exactly and say it comes from city permit records.',
     "Do not describe neighborhoods, commute times, schools or amenities, and do not place an address in a named area, unless a post says so. Say only what the sources say.",
     'Posts describe other people. Never turn a story from a post into the speaker\'s own experience ("I", "we", "a client of mine") unless the brain notes say it happened to the speaker. Say "one buyer" or "a team" instead.',
-    "Each script is 30 to 45 seconds spoken: a hook (one sentence, result first), two or three body lines, one CTA. Plain words, no hype, no emojis.",
+    "Each script runs 50 to 70 seconds spoken, about 130 to 170 words: a hook (one or two sentences, result first), five to seven body beats of two short sentences each that build a real argument with a specific detail, example or number from the sources, and a CTA of one or two sentences. Never write fewer than 120 words. Plain words, no hype, no emojis.",
     `Return JSON: {"ideas":[{"angle","hook","why_now","evidence_ids":[post ids],"method":"the script format name you used","body":[strings],"cta"}]}. Write exactly ${count} ideas, each built on different posts.`,
   ].join("\n");
   const user = `BRAIN NOTES:\n${brain}\n\nPOSTS (id | platform | engagement | title | text):\n${posts
