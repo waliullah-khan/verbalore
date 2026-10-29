@@ -1,28 +1,44 @@
 import AutoRefresh from "@/components/AutoRefresh";
 import { activeJobs } from "@/lib/jobs";
 import { currentWorkspace } from "@/lib/workspace";
-import { addWatch, createNote, dismiss, removeWatch, scan } from "./actions";
+import { SOURCE_LABEL, isPrimary, type Source } from "@/lib/signals/sources/types";
+import Link from "next/link";
+import { addContact, addOrganizations, addWatch, createNote, dismiss, removeOrganization, removeWatch, scan, scanOne } from "./actions";
 
-const KIND: Record<string, string> = { funding: "Funding", leadership: "Leadership", launch: "Launch", hiring: "Hiring", custom: "Watching" };
+const KIND: Record<string, string> = { funding: "Funding", leadership: "Leadership", launch: "Launch", hiring: "Hiring", custom: "Watching", filing: "Filing", change: "Site change" };
 
 type Row = {
-  id: string; kind: string; headline: string; summary: string; evidence_url: string | null; detected_at: string;
+  id: string; kind: string; source: Source; headline: string; summary: string; evidence_url: string | null; detected_at: string;
   relevance: number; urgency: number; status: string;
   account: { id: string; name: string; domain: string | null; stage: string | null };
 };
 
-export default async function Signals() {
+const ago = (iso: string | null) => {
+  if (!iso) return "not scanned yet";
+  const m = Math.round((Date.now() - Date.parse(iso)) / 60000);
+  return m < 2 ? "just now" : m < 90 ? `${m} min ago` : m < 2880 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`;
+};
+
+export default async function Signals({ searchParams }: { searchParams: { added?: string; skipped?: string; org?: string; src?: string; only?: string } }) {
   const { db, ws } = await currentWorkspace();
   const [{ data: signals }, { data: contacts }, { data: accounts }, { data: watches }, running] = await Promise.all([
     db.from("vl_signals").select("*, account:vl_crm_accounts(id,name,domain,stage)").eq("workspace_id", ws.id).neq("status", "dismissed"),
     db.from("vl_crm_contacts").select("id,name,title,account_id").eq("workspace_id", ws.id),
-    db.from("vl_crm_accounts").select("id,last_scanned_at").eq("workspace_id", ws.id),
+    db.from("vl_crm_accounts").select("id,name,domain,source,last_scanned_at,meta").eq("workspace_id", ws.id).order("name"),
     db.from("vl_signal_watches").select("id,phrase").eq("workspace_id", ws.id),
     activeJobs(db, ws.id, ["scan_signals"]),
   ]);
 
   const rows = ((signals ?? []) as Row[]).sort((a, b) => b.relevance * b.urgency - a.relevance * a.urgency);
-  const scanned = (accounts ?? []).map((a) => a.last_scanned_at).filter(Boolean).sort().pop() as string | undefined;
+  const countFor = (id: string) => rows.filter((r) => r.account.id === id && r.status !== "sample").length;
+
+  // filter by where a signal was found, and by organization
+  const src = searchParams.src === "primary" || searchParams.src === "news" ? searchParams.src : "all";
+  const only = (accounts ?? []).find((a) => a.id === searchParams.only);
+  const inScope = rows.filter((r) => !only || r.account.id === only.id);
+  const shown = inScope.filter((r) => (src === "primary" ? isPrimary(r.source) : src === "news" ? !isPrimary(r.source) : true));
+  const nPrimary = inScope.filter((r) => isPrimary(r.source)).length;
+  const href = (s: string) => `/signals?${new URLSearchParams({ ...(s !== "all" ? { src: s } : {}), ...(only ? { only: only.id } : {}) })}`;
 
   return (
     <div>
@@ -32,16 +48,73 @@ export default async function Signals() {
           <p className="eyebrow">Account-based</p>
           <h1 className="mt-1 text-4xl">Signals</h1>
           <p className="muted mt-2 max-w-xl">
-            Changes at the {accounts?.length ?? 0} accounts in your CRM that are worth a personal video note.
-            {scanned && ` Last scanned ${new Date(scanned).toLocaleString()}.`}
+            Changes at the {accounts?.length ?? 0} organizations you watch that are worth a personal video note. Beyond the news, Verbalore reads SEC filings, job boards, company sites and GitHub directly, so it can see a change before it is written up or posted.
           </p>
         </div>
         <form action={scan}>
-          <button className="btn btn-primary" disabled={running.length > 0}>{running.length ? "Scanning the web…" : "Scan accounts"}</button>
+          <button className="btn btn-primary" disabled={running.length > 0}>{running.length ? "Scanning…" : "Scan all"}</button>
         </form>
       </div>
 
       <section className="card mt-6">
+        <p className="eyebrow">Watch an organization</p>
+        <form action={addOrganizations} className="mt-3 space-y-3">
+          <textarea
+            name="orgs"
+            rows={3}
+            required
+            className="field"
+            placeholder={"One per line. A name is enough, a website helps.\nRamp, ramp.com\nLinear\nhttps://attio.com"}
+          />
+          <details className="text-sm">
+            <summary className="muted cursor-pointer">Add a contact (when watching one organization)</summary>
+            <div className="mt-2 grid gap-2 sm:grid-cols-3">
+              <input name="contact_name" placeholder="Name" className="field" />
+              <input name="contact_title" placeholder="Title" className="field" />
+              <input name="contact_email" type="email" placeholder="Email" className="field" />
+            </div>
+          </details>
+          <div className="flex flex-wrap items-center gap-3">
+            <button className="btn btn-primary">Watch and scan</button>
+            <span className="muted text-xs">Up to 25 at a time. It scans straight away.</span>
+          </div>
+        </form>
+        {searchParams.added !== undefined && (
+          <p className="mt-3 text-sm" style={{ color: "var(--ok)" }}>
+            Now watching {searchParams.added} new organization{searchParams.added === "1" ? "" : "s"}
+            {Number(searchParams.skipped) > 0 && `, ${searchParams.skipped} already on the list`}. The first scan is running.
+          </p>
+        )}
+        {searchParams.org === "empty" && <p className="mt-3 text-sm" style={{ color: "var(--warn)" }}>Type at least one organization name.</p>}
+
+        <ul className="mt-5 divide-y" style={{ borderColor: "var(--line)" }}>
+          {(accounts ?? []).map((a) => {
+            const board = (a.meta as { jobBoard?: { provider: string } } | null)?.jobBoard;
+            return (
+              <li key={a.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3 text-sm">
+                <div className="min-w-0 flex-1">
+                  <span className="font-medium">{a.name}</span>
+                  {a.domain ? <span className="muted"> · {a.domain}</span> : <span className="muted"> · no website found</span>}
+                  <p className="muted text-xs">
+                    {a.source === "manual" ? "Added by you" : "Sample CRM"} · scanned {ago(a.last_scanned_at)} · <Link href={`/signals?only=${a.id}`} className="underline underline-offset-2">{countFor(a.id)} signal{countFor(a.id) === 1 ? "" : "s"}</Link>
+                    {board && ` · job board: ${board.provider}`}
+                  </p>
+                </div>
+                <form action={scanOne}>
+                  <input type="hidden" name="id" value={a.id} />
+                  <button className="btn btn-ghost !px-3 !py-1.5" disabled={running.length > 0}>Scan</button>
+                </form>
+                <form action={removeOrganization}>
+                  <input type="hidden" name="id" value={a.id} />
+                  <button className="muted text-xs underline-offset-4 hover:underline" aria-label={`Stop watching ${a.name}`}>Stop watching</button>
+                </form>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+
+      <section className="card mt-4">
         <p className="eyebrow">Watch for something specific</p>
         <form action={addWatch} className="mt-3 flex flex-wrap gap-2">
           <input name="phrase" placeholder="e.g. opened a new office, raised a seed round" className="field min-w-0 flex-1" />
@@ -60,15 +133,30 @@ export default async function Signals() {
         )}
       </section>
 
-      <div className="mt-6 grid gap-4">
-        {rows.map((s) => {
+      <div className="mt-6 flex flex-wrap items-center gap-2" role="tablist" aria-label="Filter signals">
+        {([["all", `All (${inScope.length})`], ["primary", `Found at the source (${nPrimary})`], ["news", `News (${inScope.length - nPrimary})`]] as const).map(([k, label]) => (
+          <Link key={k} href={href(k)} role="tab" aria-selected={src === k} className={`rounded-full px-4 py-2 text-sm transition ${src === k ? "bg-[var(--ink)] text-[var(--paper)]" : "hover:bg-[var(--paper-2)]"}`}>{label}</Link>
+        ))}
+        {only && (
+          <span className="chip gap-2">
+            {only.name}
+            <Link href={src === "all" ? "/signals" : `/signals?src=${src}`} aria-label="Show all organizations" className="opacity-60 hover:opacity-100">×</Link>
+          </span>
+        )}
+      </div>
+
+      <div className="mt-4 grid gap-4">
+        {shown.map((s) => {
           const people = (contacts ?? []).filter((c) => c.account_id === s.account.id);
+          const primary = isPrimary(s.source);
           return (
             <article key={s.id} className="card">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="chip" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>{KIND[s.kind] ?? s.kind}</span>
                 <span className="display text-lg">{s.account.name}</span>
                 {s.account.stage && <span className="muted text-sm">{s.account.stage}</span>}
+                <span className="chip" title={primary ? "Read directly from the source, not from a news story" : "Reported in the news"}>{SOURCE_LABEL[s.source] ?? s.source}</span>
+                {primary && <span className="chip" style={{ background: "var(--accent-soft)", color: "var(--ok)" }}>found at the source</span>}
                 {s.status === "sample" && <span className="chip">sample</span>}
                 <span className="chip ml-auto">fit {Math.round(s.relevance * 100)} · urgency {Math.round(s.urgency * 100)}</span>
               </div>
@@ -91,7 +179,16 @@ export default async function Signals() {
                     <button className="btn btn-primary">Make a video note</button>
                   </form>
                 ) : (
-                  <span className="muted text-sm">No contact on this account yet.</span>
+                  <details className="w-full text-sm">
+                    <summary className="muted cursor-pointer">No contact yet. Add one to send a video note.</summary>
+                    <form action={addContact} className="mt-2 grid gap-2 sm:grid-cols-4">
+                      <input type="hidden" name="account" value={s.account.id} />
+                      <input name="name" required placeholder="Name" className="field" />
+                      <input name="title" placeholder="Title" className="field" />
+                      <input name="email" type="email" placeholder="Email" className="field" />
+                      <button className="btn btn-ghost">Add contact</button>
+                    </form>
+                  </details>
                 )}
                 <form action={dismiss}>
                   <input type="hidden" name="id" value={s.id} />
@@ -101,10 +198,10 @@ export default async function Signals() {
             </article>
           );
         })}
-        {!rows.length && (
+        {!shown.length && (
           <div className="card text-center">
             <p className="display text-xl">No signals yet</p>
-            <p className="muted mt-1 text-sm">Press “Scan accounts” and Verbalore searches the web for changes at each account.</p>
+            <p className="muted mt-1 text-sm">{rows.length ? "Nothing matches this filter." : "Add an organization above, or press “Scan all”."}</p>
           </div>
         )}
       </div>

@@ -65,7 +65,7 @@ async function reddit(topic: string): Promise<Post[]> {
   }));
 }
 
-async function hn(topic: string): Promise<Post[]> {
+async function hnSearch(topic: string): Promise<Post[]> {
   const since = Math.floor(Date.now() / 1000) - 30 * 86_400;
   const url = `https://hn.algolia.com/api/v1/search?query=${encodeURIComponent(topic)}&tags=story&numericFilters=created_at_i>${since}&hitsPerPage=10`;
   const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
@@ -82,6 +82,19 @@ async function hn(topic: string): Promise<Post[]> {
     postedAt: iso(h.created_at),
     kind: "thread" as const,
   }));
+}
+
+// Algolia needs every word to match, so a long niche phrase finds nothing. Step down to shorter queries,
+// and let the relevance filter drop whatever noise the broader words bring in.
+async function hn(topic: string): Promise<Post[]> {
+  const words = topic.split(/\s+/).filter(Boolean);
+  const longest = words.filter((w) => w.length > 4).sort((a, b) => b.length - a.length);
+  const tries = Array.from(new Set([topic, words.slice(0, 2).join(" "), ...longest])).slice(0, 4);
+  for (const q of tries) {
+    const found = await hnSearch(q);
+    if (found.length >= 3) return found;
+  }
+  return [];
 }
 
 async function youtube(topic: string): Promise<Post[]> {

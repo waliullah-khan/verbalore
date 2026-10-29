@@ -6,6 +6,7 @@ import { activeJobs, enqueue } from "@/lib/jobs";
 import { currentWorkspace } from "@/lib/workspace";
 import { writeNoteScript } from "@/lib/signals/note";
 import { sendEmail, esc } from "@/lib/email/resend";
+import { parseOrgList, resolveDomain } from "@/lib/signals/orgs";
 
 export async function scan() {
   const { db, ws } = await currentWorkspace();
@@ -113,4 +114,75 @@ export async function saveNoteScript(formData: FormData) {
   const { data: note } = await db.from("vl_video_notes").update({ script }).eq("id", id).select("idea_id").single();
   if (note?.idea_id) await db.from("vl_ideas").update({ script, hook }).eq("id", note.idea_id);
   revalidatePath(`/signals/note/${id}`);
+}
+
+// Watch any organisation: one name or a pasted list. A missing website is looked up so the
+// primary sources (job board, SEC, the company's own site) can be read, then it is scanned straight away.
+export async function addOrganizations(formData: FormData) {
+  const { db, ws } = await currentWorkspace();
+  const entries = parseOrgList(String(formData.get("orgs") ?? ""));
+  if (!entries.length) redirect("/signals?org=empty");
+
+  const { data: existing } = await db.from("vl_crm_accounts").select("name").eq("workspace_id", ws.id);
+  const have = new Set((existing ?? []).map((a) => String(a.name).toLowerCase()));
+  const fresh = entries.filter((e) => !have.has(e.name.toLowerCase()));
+
+  const rows = await Promise.all(
+    fresh.map(async (e) => ({
+      workspace_id: ws.id,
+      name: e.name,
+      domain: e.domain ?? (await resolveDomain(e.name)),
+      source: "manual",
+    }))
+  );
+  let created: { id: string }[] = [];
+  if (rows.length) {
+    const res = await db.from("vl_crm_accounts").insert(rows).select("id");
+    if (res.error) throw res.error;
+    created = res.data;
+  }
+
+  // an optional contact only makes sense when exactly one organisation was added
+  const contactName = String(formData.get("contact_name") ?? "").trim();
+  if (created.length === 1 && contactName) {
+    await db.from("vl_crm_contacts").insert({
+      workspace_id: ws.id,
+      account_id: created[0].id,
+      name: contactName.slice(0, 80),
+      title: String(formData.get("contact_title") ?? "").trim().slice(0, 80) || null,
+      email: String(formData.get("contact_email") ?? "").trim().slice(0, 120) || null,
+    });
+  }
+
+  if (created.length) await enqueue(db, ws.id, "scan_signals", { accountIds: created.map((a) => a.id) });
+  revalidatePath("/signals");
+  redirect(`/signals?added=${created.length}&skipped=${entries.length - fresh.length}`);
+}
+
+export async function removeOrganization(formData: FormData) {
+  const { db } = await currentWorkspace();
+  await db.from("vl_crm_accounts").delete().eq("id", String(formData.get("id")));
+  revalidatePath("/signals");
+}
+
+export async function scanOne(formData: FormData) {
+  const { db, ws } = await currentWorkspace();
+  await enqueue(db, ws.id, "scan_signals", { accountIds: [String(formData.get("id"))] });
+  revalidatePath("/signals");
+}
+
+// A video note needs someone to send it to, so a contact can be added to any watched organization.
+export async function addContact(formData: FormData) {
+  const { db, ws } = await currentWorkspace();
+  const name = String(formData.get("name") ?? "").trim();
+  const accountId = String(formData.get("account"));
+  if (!name) return;
+  await db.from("vl_crm_contacts").insert({
+    workspace_id: ws.id,
+    account_id: accountId,
+    name: name.slice(0, 80),
+    title: String(formData.get("title") ?? "").trim().slice(0, 80) || null,
+    email: String(formData.get("email") ?? "").trim().slice(0, 120) || null,
+  });
+  revalidatePath("/signals");
 }

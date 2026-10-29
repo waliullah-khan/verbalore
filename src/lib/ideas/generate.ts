@@ -4,7 +4,8 @@ import { balance, dedupe, scorePosts } from "../research/score";
 import type { Post } from "../research/types";
 import { jevDecide, pickOne } from "../jev";
 import { completeJson } from "../llm";
-import { buildVoiceProfile, type VoiceProfile } from "../brain/voice";
+import { buildVoiceProfile, measureVoice, type VoiceProfile } from "../brain/voice";
+import { docsForUseCase } from "../brain/scope";
 import { playbook, profileFor, type Playbook, type UseCaseId } from "../usecases";
 import { buildScript, type Evidence, type Idea, type Reference } from "./types";
 
@@ -101,18 +102,26 @@ export async function generateIdeas(db: SupabaseClient, ws: Workspace, count = 5
     if (r.usedFixture) notes.push(`${r.platform}: sample data${r.error ? ` (${r.error})` : ""}`);
   });
   lap("research");
-  let pool = scorePosts(dedupe(results.flatMap((r) => r.posts)));
+  // Sample posts only stand in when a source is down. Once there is enough live material they are left out.
+  const everything = results.flatMap((r) => r.posts);
+  const live = everything.filter((p) => !p.synthetic);
+  if (live.length >= 8) notes.push(`using ${live.length} live posts; sample posts left out`);
+  let pool = scorePosts(dedupe(live.length >= 8 ? live : everything));
   const relevant = await filterRelevant(profile, pool);
   pool = relevant.length >= count ? relevant : pool;
   const top = balance(pool, 4, 20);
   lap("relevance");
 
-  const [{ data: docs }, voice] = await Promise.all([
-    db.from("vl_brain_docs").select("title,content").eq("workspace_id", ws.id).order("created_at"),
-    buildVoiceProfile(db, ws.id),
-  ]);
-  const brain = (docs ?? []).map((d) => `# ${d.title}\n${d.content}`).join("\n\n").slice(0, 6000);
-  const proof = (docs ?? []).find((d) => /proof/i.test(d.title))?.content.split(/(?<=\.)\s/)[0] ?? "";
+  // each use case writes from its own documents, so a developer tab never quotes the sales playbook
+  const { data: allDocs } = await db.from("vl_brain_docs").select("title,content,kind,use_case").eq("workspace_id", ws.id).order("created_at");
+  const docs = docsForUseCase(allDocs ?? [], useCase);
+  // the stored voice profile describes the workspace's own business; other tabs measure their own posts
+  const voice =
+    useCase === "gtm" || useCase === "general"
+      ? await buildVoiceProfile(db, ws.id)
+      : measureVoice(docs.filter((d) => d.kind === "post").map((d) => d.content as string));
+  const brain = docs.map((d) => `# ${d.title}\n${d.content}`).join("\n\n").slice(0, 6000);
+  const proof = docs.find((d) => /proof|results|lessons|decisions/i.test(d.title))?.content.split(/(?<=\.)\s/)[0] ?? "";
 
   lap("brain");
   let ideas: Idea[] = [];

@@ -4,13 +4,12 @@ import { runActor, hasApify } from "../research/apify";
 import { webSearch, hasFirecrawl } from "../research/firecrawl";
 import { jevDecide } from "../jev";
 
-export type SignalKind = "funding" | "leadership" | "hiring" | "launch" | "custom";
+import { URGENCY, type Account, type Found, type SignalKind } from "./sources/types";
+import { primarySignals } from "./sources";
+import type { Board } from "./sources/jobs";
 
-export type Account = { id: string; name: string; domain: string | null };
+export type { Account, Found, SignalKind };
 type Hit = { title: string; snippet: string; url: string; date: string | null };
-export type Found = { kind: SignalKind; headline: string; summary: string; url: string; relevance: number; urgency: number; detectedAt: string };
-
-const URGENCY: Record<SignalKind, number> = { funding: 0.9, leadership: 0.85, launch: 0.7, hiring: 0.6, custom: 0.65 };
 
 const RULES: [SignalKind, RegExp][] = [
   ["funding", /\b(raises?|raised|funding|series [a-f]\b|seed round|valuation|investment round|secures \$)/i],
@@ -31,8 +30,12 @@ const GENERIC_TITLE =
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+// A title that is only a date ("October 13, 2026") says nothing about what happened.
+const DATE_ONLY = /^(?:(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4}|\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}|\d{4}-\d{2}-\d{2})$/i;
+
 export function isGeneric(title: string, url: string): boolean {
-  return title.trim().length < 12 || GENERIC_TITLE.test(title.trim()) || GENERIC_HOST.test(url);
+  const t = title.trim();
+  return t.length < 12 || DATE_ONLY.test(t) || GENERIC_TITLE.test(t) || GENERIC_HOST.test(url);
 }
 
 // "Clay Lichterman" is a person, "Clay Raises" is a company. A capitalised word after the name that
@@ -117,7 +120,7 @@ async function jevKinds(account: Account, hits: Hit[]): Promise<Map<number, { ki
   return out;
 }
 
-export async function findSignals(account: Account, watches: string[]): Promise<Found[]> {
+export async function newsSignals(account: Account, watches: string[]): Promise<Found[]> {
   const found: Found[] = [];
   const seen = new Set<string>();
   for (const { q, kind: hint } of queriesFor(account, watches)) {
@@ -148,6 +151,7 @@ export async function findSignals(account: Account, watches: string[]): Promise<
       }
       found.push({
         kind,
+        source: "news",
         headline: h.title.replace(/\s*[-|–].*$/, "").slice(0, 140) || h.title.slice(0, 140),
         summary: h.snippet.slice(0, 280),
         url: h.url,
@@ -168,35 +172,57 @@ export async function findSignals(account: Account, watches: string[]): Promise<
     .slice(0, 6);
 }
 
+// Everything known about one account: what the news says, and what the primary sources show
+// (SEC filings, job boards, the company's own site, GitHub) before the news catches up.
+export async function scanAccount(account: Account, watches: string[]): Promise<{ found: Found[]; board: Board | null; notes: string[] }> {
+  const [news, primary] = await Promise.all([
+    newsSignals(account, watches).catch((e: Error) => {
+      console.error(`news signals failed for ${account.name}:`, e.message);
+      return [] as Found[];
+    }),
+    primarySignals(account),
+  ]);
+  const found = [...primary.found, ...news].sort((a, b) => b.relevance * b.urgency - a.relevance * a.urgency).slice(0, 12);
+  return { found, board: primary.board, notes: primary.notes };
+}
+
 export async function scanWorkspace(db: SupabaseClient, workspaceId: string, only?: string[]) {
   const [{ data: accounts }, { data: watches }] = await Promise.all([
-    db.from("vl_crm_accounts").select("id,name,domain").eq("workspace_id", workspaceId),
+    db.from("vl_crm_accounts").select("id,name,domain,meta").eq("workspace_id", workspaceId),
     db.from("vl_signal_watches").select("phrase").eq("workspace_id", workspaceId),
   ]);
   const phrases = (watches ?? []).map((w) => w.phrase as string);
   let inserted = 0;
   let scanned = 0;
+  const bySource: Record<string, number> = {};
+  const notes: string[] = [];
   for (const account of (accounts ?? []).filter((a) => !only || only.includes(a.id))) {
-    const signals = await findSignals(account, phrases);
+    const { found: signals, board, notes: n } = await scanAccount(account, phrases);
+    notes.push(...n.map((x) => `${account.name} ${x}`));
     scanned++;
+    if (board && !(account.meta as { jobBoard?: Board } | null)?.jobBoard) {
+      await db.from("vl_crm_accounts").update({ meta: { ...(account.meta ?? {}), jobBoard: board } }).eq("id", account.id);
+    }
     if (signals.length) {
       const rows = signals.map((s) => ({
         workspace_id: workspaceId,
         account_id: account.id,
         kind: s.kind,
+        source: s.source,
         headline: s.headline,
         summary: s.summary,
         evidence_url: s.url,
         detected_at: s.detectedAt,
         relevance: s.relevance,
         urgency: s.urgency,
-        hash: signalHash(account.id, s.kind, s.url),
+        hash: signalHash(account.id, s.kind, s.dedupeKey ?? s.url),
         status: "new",
       }));
-      const { data } = await db.from("vl_signals").upsert(rows, { onConflict: "workspace_id,hash", ignoreDuplicates: true }).select("id");
+      const { data } = await db.from("vl_signals").upsert(rows, { onConflict: "workspace_id,hash", ignoreDuplicates: true }).select("id,source");
       inserted += data?.length ?? 0;
+      for (const r of data ?? []) bySource[r.source as string] = (bySource[r.source as string] ?? 0) + 1;
     }
     await db.from("vl_crm_accounts").update({ last_scanned_at: new Date().toISOString() }).eq("id", account.id);
   }
-  return { scanned, inserted };
+  return { scanned, inserted, bySource, notes: notes.slice(0, 8) };
 }

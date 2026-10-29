@@ -2,6 +2,7 @@ import { revalidatePath } from "next/cache";
 import { currentWorkspace } from "@/lib/workspace";
 import { addDoc, readUrl } from "@/lib/brain/ingest";
 import { buildVoiceProfile, type VoiceProfile } from "@/lib/brain/voice";
+import { PLAYBOOKS, isUseCase, playbook } from "@/lib/usecases";
 
 async function addNote(formData: FormData) {
   "use server";
@@ -9,7 +10,8 @@ async function addNote(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim() || "Untitled note";
   const content = String(formData.get("content") ?? "").trim();
   const kind = String(formData.get("kind") ?? "note");
-  if (content) await addDoc(db, ws.id, { kind, title, content });
+  const tag = String(formData.get("use_case") ?? "");
+  if (content) await addDoc(db, ws.id, { kind, title, content, use_case: isUseCase(tag) ? tag : null });
   revalidatePath("/brain");
 }
 
@@ -40,7 +42,7 @@ async function relearn() {
 export default async function Brain() {
   const { db, ws } = await currentWorkspace();
   const [{ data: docs }, { data: voice }] = await Promise.all([
-    db.from("vl_brain_docs").select("id,kind,title,source_url,content,created_at").eq("workspace_id", ws.id).order("created_at", { ascending: false }),
+    db.from("vl_brain_docs").select("id,kind,title,source_url,content,created_at,use_case").eq("workspace_id", ws.id).order("created_at", { ascending: false }),
     db.from("vl_voice_profiles").select("profile,updated_at").eq("workspace_id", ws.id).maybeSingle(),
   ]);
   const profile = voice?.profile as VoiceProfile | undefined;
@@ -79,6 +81,12 @@ export default async function Brain() {
             <option value="note">Note about my business</option>
             <option value="post">One of my posts or scripts</option>
           </select>
+          <label className="block text-sm">Applies to
+            <select name="use_case" className="field mt-1">
+              <option value="">Everything</option>
+              {PLAYBOOKS.map((p) => <option key={p.id} value={p.id}>{p.label} only</option>)}
+            </select>
+          </label>
           <textarea name="content" rows={5} placeholder="Paste anything" className="field" required />
           <button className="btn btn-primary">Save to brain</button>
         </form>
@@ -98,7 +106,7 @@ export default async function Brain() {
               <div className="min-w-0">
                 <p className="font-medium">{d.title}</p>
                 <p className="muted mt-1 line-clamp-2 text-sm">{d.content}</p>
-                <p className="muted mt-2 text-xs"><span className="chip">{d.kind}</span> {d.source_url && <a href={d.source_url} target="_blank" rel="noreferrer" className="ml-2 underline">{new URL(d.source_url).hostname}</a>}</p>
+                <p className="muted mt-2 text-xs"><span className="chip">{d.kind}</span> <span className="chip">{d.use_case ? playbook(d.use_case).label : "everything"}</span> {d.source_url && <a href={d.source_url} target="_blank" rel="noreferrer" className="ml-2 underline">{new URL(d.source_url).hostname}</a>}</p>
               </div>
               <form action={removeDoc}>
                 <input type="hidden" name="id" value={d.id} />

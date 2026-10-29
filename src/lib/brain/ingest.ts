@@ -44,7 +44,7 @@ export async function readUrl(url: string): Promise<{ title: string; text: strin
 
 // Stores the document and its chunks. Embeddings are best effort: without a key the chunks
 // are still saved, and writing falls back to reading the documents whole.
-export async function addDoc(db: SupabaseClient, workspaceId: string, doc: { kind: string; title: string; content: string; source_url?: string }) {
+export async function addDoc(db: SupabaseClient, workspaceId: string, doc: { kind: string; title: string; content: string; source_url?: string; use_case?: string | null }) {
   const { data, error } = await db.from("vl_brain_docs").insert({ ...doc, workspace_id: workspaceId, content: doc.content.slice(0, 60_000) }).select("id").single();
   if (error) throw error;
   const parts = chunk(doc.content.slice(0, 60_000));

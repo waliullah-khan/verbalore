@@ -1,14 +1,19 @@
 import { createHash } from "node:crypto";
-import { serviceClient } from "../src/lib/supabase/service";
+import { createClient } from "@supabase/supabase-js";
 import demo from "../fixtures/demo-workspace.json";
+import personas from "../fixtures/personas.json";
 import crm from "../fixtures/crm.json";
 import sampleSignals from "../fixtures/signals.json";
 
+// Safe to run more than once. It signs in as the demo user, so row level security applies as in the app.
 async function main() {
-  const db = await serviceClient();
-  const { data: session } = await db.auth.getUser();
-  const uid = session.user?.id;
-  if (!uid) throw new Error("not signed in; set DEMO_USER_EMAIL and DEMO_USER_PASSWORD");
+  const db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, { auth: { persistSession: false } });
+  const { data: session, error: authError } = await db.auth.signInWithPassword({
+    email: process.env.DEMO_USER_EMAIL!,
+    password: process.env.DEMO_USER_PASSWORD!,
+  });
+  if (authError || !session.user) throw new Error(`demo sign-in failed: ${authError?.message}. Create the demo user first, see the README.`);
+  const uid = session.user.id;
 
   let { data: ws } = await db.from("vl_workspaces").select("*").eq("owner_id", uid).eq("is_demo", true).maybeSingle();
   if (!ws) {
@@ -25,11 +30,17 @@ async function main() {
     console.log("workspace exists", ws.id);
   }
 
-  const { count: docs } = await db.from("vl_brain_docs").select("id", { count: "exact", head: true }).eq("workspace_id", ws.id);
-  if (!docs) {
-    const { error } = await db.from("vl_brain_docs").insert(demo.brain.map((d) => ({ ...d, workspace_id: ws.id })));
+  // Brain documents: Clearpath's belong to the GTM tab, the personas to their own tabs.
+  const { data: have } = await db.from("vl_brain_docs").select("title,use_case").eq("workspace_id", ws.id);
+  const known = new Set((have ?? []).map((d) => `${d.use_case}|${d.title}`));
+  const wanted = [
+    ...demo.brain.map((d) => ({ ...d, use_case: "gtm" })),
+    ...personas.docs,
+  ].filter((d) => !known.has(`${d.use_case}|${d.title}`));
+  if (wanted.length) {
+    const { error } = await db.from("vl_brain_docs").insert(wanted.map((d) => ({ ...d, workspace_id: ws.id })));
     if (error) throw error;
-    console.log("brain docs", demo.brain.length);
+    console.log("brain docs added", wanted.length);
   }
 
   const { count: accts } = await db.from("vl_crm_accounts").select("id", { count: "exact", head: true }).eq("workspace_id", ws.id);
@@ -50,6 +61,7 @@ async function main() {
         workspace_id: ws.id,
         account_id: byName.get(account),
         status: "sample",
+        source: "news",
         hash: createHash("sha256").update(`${account}|${s.kind}|${s.headline}`).digest("hex").slice(0, 32),
       }))
     );

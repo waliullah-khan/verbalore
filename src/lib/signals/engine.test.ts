@@ -72,3 +72,10 @@ test("job listings and stat pages are filtered", () => {
   assert.equal(isGeneric("How Supabase turned product launches into a content machine", "https://x.com/a"), true);
   assert.equal(isGeneric("Ramp Raises $1.85 Billion at a $60 Billion Valuation", "https://x.com/a"), false);
 });
+
+test("a title that is only a date is not a signal", () => {
+  assert.equal(isGeneric("October 13, 2026", "https://x.com/a"), true);
+  assert.equal(isGeneric("Oct 3rd 2026", "https://x.com/a"), true);
+  assert.equal(isGeneric("2026-10-13", "https://x.com/a"), true);
+  assert.equal(isGeneric("October 2026 product updates from Notion", "https://x.com/a"), false);
+});

@@ -1,0 +1,24 @@
+{
+  "_note": "Synthetic brain documents for the demo workspace's other use-case tabs. Every person, product and number here is invented for the demo.",
+  "docs": [
+    { "use_case": "real_estate", "kind": "note", "title": "Who I am and what I offer", "content": "I am Maya Ortiz, a residential agent in a mid-size metro. I work with first-time buyers who are nervous about making offers, and with sellers who want a clean, quick sale. I offer a free 20 minute buyer plan call. I always explain closing costs up front, before anyone tours a home." },
+    { "use_case": "real_estate", "kind": "note", "title": "Recent results", "content": "Last quarter I closed 9 homes. Six were first-time buyers. Two of them won against several offers without waiving inspections, by writing a short personal letter and offering a flexible closing date. Average time from first call to accepted offer for buyers was about five weeks." },
+    { "use_case": "real_estate", "kind": "post", "title": "Post: your offer is a story", "content": "Your offer is not just a number. It is a story the seller can picture. A short letter, clean terms and a flexible closing date beat a bigger number surprisingly often. Say it plainly. Call me before you tour a fifth house." },
+
+    { "use_case": "developers", "kind": "note", "title": "What I build", "content": "I maintain Pilewise, an open source TypeScript toolkit for background jobs that runs on Postgres. No Redis. It handles retries, scheduling and a small dashboard with a few lines of config. It is MIT licensed and used by small SaaS teams." },
+    { "use_case": "developers", "kind": "note", "title": "Proof", "content": "I moved an app running about 40 thousand jobs a day from a cron script plus Redis to Pilewise in one afternoon. I deleted around 400 lines of code and the retry bugs went away. Median job pickup time stayed under 50 milliseconds on a small instance." },
+    { "use_case": "developers", "kind": "post", "title": "Post: queue bugs are retry bugs", "content": "Most queue bugs are retry bugs. Make every job idempotent, give it a unique key, and let the database be the lock. Then you stop writing clever code. Show the code, run it, ship it." },
+
+    { "use_case": "product_marketing", "kind": "note", "title": "What I do", "content": "I run positioning and launch work for B2B software teams. My playbook is simple: one customer problem, one sentence of positioning, one proof point, and one message test every week." },
+    { "use_case": "product_marketing", "kind": "note", "title": "Proof", "content": "A headline test on a pricing page lifted trial starts by about a third over four weeks at a 60 person software company. A launch rebuilt around the customer's problem instead of the feature list doubled demo requests from the launch email." },
+    { "use_case": "product_marketing", "kind": "post", "title": "Post: lead with the problem", "content": "Your homepage lists features. Your buyer is thinking about a problem. Lead with the problem in their words, then show the feature as the answer. Test one line a week. Keep the winner." },
+
+    { "use_case": "c_suite", "kind": "note", "title": "Context", "content": "I am the CEO of a 120 person B2B software company that sells to finance teams. I post once a week about decisions, hiring and what I got wrong. No hype, no slogans." },
+    { "use_case": "c_suite", "kind": "note", "title": "Recent decisions", "content": "We paused two product lines to focus on one. We hired a head of customer success before a head of sales. Revenue grew faster once we stopped chasing every request. Churn fell after I joined weekly customer calls." },
+    { "use_case": "c_suite", "kind": "post", "title": "Post: what I got wrong", "content": "I said yes to too many customers this year. Every yes felt like growth. Together they slowed us down. This quarter I said no more than I said yes, and the team shipped faster. Focus is a decision you repeat." },
+
+    { "use_case": "founders", "kind": "note", "title": "Context", "content": "I am a solo founder building a scheduling tool for independent clinics, in public. I have 14 paying clinics and about 6 thousand dollars in monthly revenue, with no ads. I share the real numbers every month." },
+    { "use_case": "founders", "kind": "note", "title": "Lessons", "content": "I charged from day one and learned more in a week than in three months of free beta. I nearly quit in the spring after losing two clinics in one week, then fixed onboarding and both came back. The biggest unlock was calling every customer who churned." },
+    { "use_case": "founders", "kind": "post", "title": "Post: call the people who left", "content": "Call every customer who leaves. Not a survey, a call. In five minutes you learn what a hundred emails will not tell you. I fixed onboarding because of two calls. Both customers came back." }
+  ]
+}

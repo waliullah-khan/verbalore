@@ -19,8 +19,20 @@ Verbalore researches what your market is posting about, writes the script in you
    **Record on your phone:** the Studio shows a QR code. Scan it and the phone opens a full-screen recorder with the same teleprompter, no sign-in needed. When you press send, the take uploads straight to storage and appears in the desktop Studio on its own, ready to edit. The link is single-purpose, expires after two hours, and can only upload into its own folder.
 4. **Edit.** A worker normalises the take, gets word timings, cuts the transcript into scenes, and gives every scene a graphic: hook title, stat, list, quote, tip, code window, before/after, fact tiles, call to action. The scene plan is validated, so a scene can never ship without its graphic. Each use case offers its own edit themes (editorial, kinetic type, product UI, listing, terminal, boardroom).
 5. **Library and posting.** Preview, re-edit in another style, and post to up to 15 platforms through Upload-Post, now or scheduled.
-6. **Signals.** For each account in the CRM the engine searches the web for funding, leadership changes, launches and hiring, classifies and de-duplicates what it finds, and ranks by fit and urgency. You can also add a plain-language signal to watch ("opened a new office"). Pick a signal and a contact and it writes a 30 second note, you record it, and it goes out as a share page `/v/<token>` with view tracking.
-7. **Brain.** Notes, posts and pages you add. Scripts are written only from this, and a voice profile (tone, sentence length, repeated phrases) is learned from your own writing.
+6. **Signals.** Watch any organization: add one, or paste a list of names and websites. For each one the engine reads the primary sources directly (SEC filings, the company's job board, its own website, GitHub) and also searches the news. Results are classified, de-duplicated, and ranked by fit and urgency, and each shows where it was found. You can also add a plain-language signal to watch ("opened a new office"). Pick a signal and a contact and it writes a 30 second note, you record it, and it goes out as a share page `/v/<token>` with view tracking.
+7. **Brain.** Notes, posts and pages you add. Scripts are written only from this, and a voice profile (tone, sentence length, repeated phrases) is learned from your own writing. A document can apply to everything or to one use-case tab, so real-estate notes never leak into developer content.
+
+## Where signals come from
+
+| Source | What it reads | Why it can be early |
+|---|---|---|
+| SEC EDGAR | Form D (a private company reporting a raise), S-1, 8-K, matched on the filer's own name | A Form D is filed within days of the first sale, often before any announcement |
+| Job boards | The company's Greenhouse, Ashby, Lever, Workable or Recruitee board, read through the public API, with the publish date of each role | The board is the source of truth and is updated before the careers page or LinkedIn. Roles missing from the careers page are flagged |
+| Company website | Pricing page, homepage and blog, compared with the last scan | Changes appear on the site before they are written about |
+| GitHub | New public repositories under the company's own organization | Engineering ships before marketing announces |
+| News and social | Web search | Reported by someone else, so it is the slowest |
+
+Each source fails on its own without taking the others down, and a signal is only ever created from something the source actually returned. Job boards are found by asking the applicant systems directly. A guessed board is accepted only when the system names the same company, or the company's own site links to it, because two companies can share a name.
 
 ## Quick start
 
@@ -62,6 +74,8 @@ Copy `.env.example` to `.env.local`. Only the Supabase values are required to bo
 | `RESEND_API_KEY`, `RESEND_FROM_EMAIL` | Digest and note emails | Sends are simulated and labelled as such |
 | `UPLOAD_POST_API_KEY` | Posting to 15 platforms | Posting is simulated and labelled as such |
 | `HUBSPOT_TOKEN` | Live CRM | The sample CRM is used |
+| `SEC_USER_AGENT` | Identifies you to SEC EDGAR, which asks every client to | A generic agent is sent |
+| `GITHUB_TOKEN` | Optional, raises GitHub's rate limit | 60 requests an hour |
 | `SUPABASE_SERVICE_KEY` | Phone capture, cron and the worker run with full access | They sign in as the demo user instead, under row level security |
 | `PUBLIC_BASE_URL` | The address the phone QR code points at | The computer's local network address is used |
 
@@ -128,6 +142,11 @@ That is roughly 3 to 4 times real time for the render itself, so a 45 second vid
 
 - Without Jev and the writer model, scripts are templates and signal results are noisier. The product is meant to run with both.
 - Phone uploads go to Supabase storage, whose file size limit depends on the plan (50 MB on the free tier). The phone recorder uses 4 Mbps, which keeps about a minute of video under that. A video from the phone's own camera app can be larger.
+- Public job-board APIs list only published roles, so roles that are truly unlisted cannot be seen. What is visible is the full published list with exact dates, which is more than the careers page shows. "On the board but not on the careers page" is only claimed when the careers page lists jobs in its HTML; pages that load jobs with JavaScript are skipped rather than guessed at.
+- Not every company's board has a public API, and a company on an unsupported system returns no job signals.
+- Site watching only reports changes from the second scan on, because the first scan sets the baseline. Page diffs are noisy (counters, timestamps, rotating examples), so lines pass a filter and then Jev decides whether it is a real change. Expect few site signals rather than many.
+- The signal engine reads company data. Real estate has deeper public sources that are not built yet: building permits, recorded deeds and sales, and zoning changes from city and county open-data portals. Brokerages and REITs are already covered by the SEC source.
+- Scripts quote numbers from the evidence they were built on. Check any figure against its linked source before you post it.
 - Facebook has no open search, so it comes through web search and has no engagement counts.
 - Captions follow the script's timing when no speech-to-text key is set, so they drift if you ad-lib. With Cartesia they follow the speech.
 - The signal engine uses web search, so it finds what is published and indexed, not private changes. A LinkedIn-based signal would need a logged-in source.

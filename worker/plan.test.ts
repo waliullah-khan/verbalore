@@ -64,3 +64,17 @@ test("use case steers scene choice", () => {
   assert.equal(heuristicScene(seg, 1, 4, ["compare"]).type, "compare");
   assert.notEqual(heuristicScene(seg, 1, 4, ["stat"]).type, "compare");
 });
+
+test("an opening that is not a hook and an ending that is not a cta are corrected", async () => {
+  const { planScenes: plan } = await import("./plan");
+  const words = wordsFromText(
+    "We booked eleven meetings from sixty notes. Here is the part nobody tells you. First spot the signal and then record thirty seconds. Then send it the same day. Pick one signal and send one note today.",
+    24
+  );
+  const saved = process.env.OPENROUTER_API_KEY;
+  delete process.env.OPENROUTER_API_KEY; // heuristic path: the structural rule must hold there as well
+  const { scenes } = await plan(words, 24);
+  if (saved) process.env.OPENROUTER_API_KEY = saved;
+  assert.equal(scenes[0].type, "hook");
+  assert.equal(scenes[scenes.length - 1].type, "cta");
+});

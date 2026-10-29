@@ -30,7 +30,7 @@ export function templateNote(i: Input, proof: string): Script {
 }
 
 export async function writeNoteScript(db: SupabaseClient, i: Input): Promise<Script> {
-  const { data: docs } = await db.from("vl_brain_docs").select("title,content").eq("workspace_id", i.workspace.id);
+  const { data: docs } = await db.from("vl_brain_docs").select("title,content").eq("workspace_id", i.workspace.id).or("use_case.is.null,use_case.eq.gtm");
   const proof = (docs ?? []).find((d) => /proof/i.test(d.title))?.content.split(/(?<=\.)\s/)[0] ?? "";
   if (!process.env.OPENROUTER_API_KEY) return templateNote(i, proof);
 

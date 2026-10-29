@@ -200,7 +200,10 @@ export async function planScenes(words: Word[], duration: number, useCase: UseCa
       const parsed = modelScene.safeParse(out.scenes?.[i]);
       const h = heuristicScene(seg, i, segs.length, prefer);
       if (!parsed.success) return h;
-      const candidate: Scene = { ...parsed.data, start: seg.start, end: seg.end, text: seg.text };
+      // the opening is always the hook and the ending is always the call to action, whatever the model says
+      const type: SceneType = i === 0 ? "hook" : i === segs.length - 1 && segs.length > 1 ? "cta" : parsed.data.type;
+      const sub = type === "cta" ? parsed.data.sub ?? "Follow for more" : parsed.data.sub;
+      const candidate: Scene = { ...parsed.data, type, sub, start: seg.start, end: seg.end, text: seg.text };
       return validScene(candidate) ? candidate : h;
     });
     return { scenes, via: "model" };
