@@ -30,8 +30,26 @@ const stripHtml = (html: string) =>
     .replace(/\s+/g, " ")
     .trim();
 
+const PRIVATE_HOST = /^(localhost|.*\.local|.*\.internal|.*\.localhost)$/i;
+const PRIVATE_IPV4 = /^(0\.|10\.|127\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.)/;
+
+// Visitors type these links, so the server must never be pointed at a private network, loopback or a raw IP address.
+export function isPublicHttpUrl(raw: string): boolean {
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    return false;
+  }
+  if (u.protocol !== "http:" && u.protocol !== "https:") return false;
+  const host = u.hostname.replace(/^\[|\]$/g, "");
+  if (PRIVATE_HOST.test(host) || PRIVATE_IPV4.test(host) || host.includes(":")) return false;
+  if (/^\d+(\.\d+){3}$/.test(host)) return false;
+  return host.includes(".");
+}
+
 export async function readUrl(url: string): Promise<{ title: string; text: string }> {
-  if (!/^https?:\/\//i.test(url)) throw new Error("Enter a full link starting with http");
+  if (!isPublicHttpUrl(url)) throw new Error("Enter the full address of a public web page");
   if (hasFirecrawl()) {
     const page = await scrapePage(url);
     return { title: page.title || url, text: page.markdown };

@@ -24,6 +24,11 @@ export async function GET(req: Request, { params }: { params: { task: string } }
       await enqueue(db, ws.id, "generate_ideas", { count: 5, useCase: ws.is_demo ? "gtm" : "general" });
       out.push({ workspace: ws.id, queued: true });
     } else if (params.task === "digest") {
+      // the public demo has no real inbox, so it never sends
+      if (ws.is_demo && process.env.ALLOW_DEMO_EMAIL !== "true") {
+        out.push({ workspace: ws.id, skipped: "demo workspace" });
+        continue;
+      }
       out.push({ workspace: ws.id, ...(await sendDigest(db, ws)) });
     }
   }

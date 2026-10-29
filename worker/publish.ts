@@ -15,7 +15,11 @@ export async function publishVideo(db: SupabaseClient, publishId: string) {
 
   await db.from("vl_publish_jobs").update({ status: "publishing" }).eq("id", publishId);
 
-  if (!hasUploadPost()) {
+  // the demo workspace is open to anyone, so it only ever simulates posting unless explicitly allowed
+  const { data: owner } = await db.from("vl_workspaces").select("is_demo").eq("id", job.workspace_id).single();
+  const demoLocked = !!owner?.is_demo && process.env.ALLOW_DEMO_PUBLISH !== "true";
+
+  if (!hasUploadPost() || demoLocked) {
     await sleep(1500);
     const results = Object.fromEntries((job.platforms as string[]).map((p) => [p, { success: true, simulated: true }]));
     await db.from("vl_publish_jobs").update({ status: "simulated", results }).eq("id", publishId);

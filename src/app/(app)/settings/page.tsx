@@ -30,6 +30,7 @@ async function connectSocial() {
 async function digestNow() {
   "use server";
   const { db, ws, user } = await currentWorkspace();
+  if (ws.is_demo && process.env.ALLOW_DEMO_EMAIL !== "true") redirect(`/settings?digest=${encodeURIComponent("email is turned off in the public demo")}`);
   const r = await sendDigest(db, ws, user.email ?? undefined);
   redirect(`/settings?digest=${r.sent ? (r.simulated ? "simulated" : "sent") : encodeURIComponent(r.reason)}`);
 }

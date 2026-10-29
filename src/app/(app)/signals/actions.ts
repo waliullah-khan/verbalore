@@ -8,6 +8,7 @@ import { writeNoteScript } from "@/lib/signals/note";
 import { sendEmail, esc } from "@/lib/email/resend";
 import { parseOrgList } from "@/lib/signals/orgs";
 import { writeSignalScript } from "@/lib/signals/place-script";
+import { demoCapReached } from "@/lib/limits";
 
 export async function scan() {
   const { db, ws } = await currentWorkspace();
@@ -38,6 +39,7 @@ export async function dismiss(formData: FormData) {
 // Studio and render pipeline record and edit it.
 export async function createNote(formData: FormData) {
   const { db, ws } = await currentWorkspace();
+  if (await demoCapReached(db, ws, "vl_video_notes")) redirect("/signals?org=limit");
   const signalId = String(formData.get("signal"));
   const contactId = String(formData.get("contact"));
 
@@ -81,6 +83,8 @@ export async function createNote(formData: FormData) {
 export async function sendNote(formData: FormData) {
   const { db, ws, user } = await currentWorkspace();
   const id = String(formData.get("note"));
+  // the demo is open to anyone, so it must not become a way to email strangers from this account
+  if (ws.is_demo && process.env.ALLOW_DEMO_EMAIL !== "true") redirect(`/signals/note/${id}?error=demo-email`);
   const to = String(formData.get("to") ?? "").trim();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) redirect(`/signals/note/${id}?error=email`);
   // seeded contacts use example.com, so a real send needs an address the user typed
@@ -206,6 +210,7 @@ export async function addPlace(formData: FormData) {
 // A market or permit signal becomes a script and an idea, ready to record.
 export async function ideaFromSignal(formData: FormData) {
   const { db, ws } = await currentWorkspace();
+  if (await demoCapReached(db, ws, "vl_ideas", { column: "status", value: "signal" })) redirect("/signals?org=limit");
   const { data: s } = await db.from("vl_signals").select("*, account:vl_crm_accounts(name)").eq("id", String(formData.get("signal"))).single();
   if (!s) throw new Error("signal not found");
 

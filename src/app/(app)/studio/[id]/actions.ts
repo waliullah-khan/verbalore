@@ -4,6 +4,7 @@ import QRCode from "qrcode";
 import { redirect } from "next/navigation";
 import { captureBase } from "@/lib/capture";
 import { enqueue } from "@/lib/jobs";
+import { demoCapReached } from "@/lib/limits";
 import { currentWorkspace } from "@/lib/workspace";
 
 export async function submitRecording(input: { ideaId: string; path: string; durationS: number; template: string; noteId?: string }) {
@@ -41,6 +42,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // Starts a phone capture: a short-lived link for this idea, shown to the desktop as a QR code.
 export async function createCapture(input: { ideaId: string; noteId?: string }) {
   const { db, ws } = await currentWorkspace();
+  if (await demoCapReached(db, ws, "vl_capture_sessions")) throw new Error("hourly limit");
   const { data: idea } = await db.from("vl_ideas").select("id").eq("id", input.ideaId).maybeSingle();
   if (!idea) throw new Error("idea not found");
 

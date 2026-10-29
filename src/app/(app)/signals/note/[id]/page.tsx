@@ -10,6 +10,7 @@ const errors: Record<string, string> = {
   email: "That does not look like an email address.",
   "demo-address": "This contact is a sample with an example.com address. Type your own address to test a real send.",
   confirm: "Tick the box to confirm you want to send this.",
+  "demo-email": "Sending real email is turned off in the public demo. The share link above still works.",
 };
 
 export default async function NotePage({ params, searchParams }: { params: { id: string }; searchParams: { error?: string; sent?: string } }) {

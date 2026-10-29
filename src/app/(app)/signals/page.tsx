@@ -90,6 +90,7 @@ export default async function Signals({ searchParams }: { searchParams: { added?
                 }. The first scan is running.`}
           </p>
         )}
+        {searchParams.org === "limit" && <p className="mt-3 text-sm" style={{ color: "var(--warn)" }}>The public demo has reached its hourly limit for this action. Try again in a while.</p>}
         {searchParams.org === "empty" && <p className="mt-3 text-sm" style={{ color: "var(--warn)" }}>Type at least one organization name.</p>}
 
         <form action={addPlace} className="mt-5 flex flex-wrap items-center gap-3 rounded-xl p-3" style={{ background: "var(--paper-2)" }}>
