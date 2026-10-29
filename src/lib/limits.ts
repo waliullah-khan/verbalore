@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 // The demo workspace is open to anyone and some actions spend provider credits or storage straight from the
 // web server, outside the worker's own hourly cap. This caps those per hour. Real workspaces are never limited.
-export const DEMO_HOURLY_CAP = Number(process.env.DEMO_HOURLY_CAP ?? 15);
+export const DEMO_HOURLY_CAP = Number(process.env.DEMO_HOURLY_CAP) || 15;
 
 export async function demoCapReached(
   db: SupabaseClient,

@@ -60,6 +60,24 @@ Other commands: `npm test`, `npm run typecheck`, `npm run lint`, `npm run scan:s
 
 A phone cannot open `localhost`, so the QR code points at your computer's address on the local network, and the phone must be on the same Wi-Fi (some campus and guest networks isolate devices and block this). Mobile browsers also only allow the live camera on `https`. Over plain `http` the phone page still works: it shows the script and opens the phone's own camera app to record, then uploads as usual. For the live teleprompter on a phone, use the deployed `https` URL, or set `PUBLIC_BASE_URL` to a tunnel address before opening the Studio.
 
+## Deploy
+
+Two pieces, because rendering needs ffmpeg and Chrome, which a serverless function cannot run.
+
+| Piece | Where | What it does |
+|---|---|---|
+| Web app | Vercel (Next.js) | Pages, sign-in, queuing work, the phone recorder, the share page, the two daily cron routes |
+| Worker | Railway (Docker, `Dockerfile.worker`) | Research, signals, scene planning, rendering and posting |
+
+They share one Supabase project and talk only through the `vl_jobs` table.
+
+1. **Supabase.** Apply `supabase/migrations` in order and create the demo user (see below).
+2. **Vercel.** Import the repo as a Next.js project. Set the web app's variables: the three Supabase values, `DEMO_USER_EMAIL`, `DEMO_USER_PASSWORD`, `CRON_SECRET`, `OPENROUTER_API_KEY`, `FIRECRAWL_API_KEY`, `RESEND_API_KEY`, `UPLOAD_POST_API_KEY`, and `NEXT_PUBLIC_APP_URL` set to the deployed address. `vercel.json` schedules the two crons; Vercel sends `CRON_SECRET` as the bearer token.
+3. **Railway.** Create a service from the repo with `railway.toml` (it builds `Dockerfile.worker`). Set the worker's variables: the Supabase values, every provider key, `NEXT_PUBLIC_APP_URL`, and `JOB_LIMIT_PER_HOUR`.
+4. **Supabase Auth.** Add the deployed address to the allowed redirect URLs if you want email sign-in. The one-click demo does not need it.
+
+**A public demo is open to anyone**, so it ships with safeguards: demo workspaces never send real email or post to real accounts unless `ALLOW_DEMO_EMAIL` or `ALLOW_DEMO_PUBLISH` is `true`; the worker runs at most `JOB_LIMIT_PER_HOUR` costly jobs per workspace an hour; the model-calling actions are capped at `DEMO_HOURLY_CAP` an hour; and the Brain only fetches public web pages. Turn on Vercel's deployment protection if you do not want the demo public at all.
+
 ## Reproduce the demo
 
 Copy `.env.example` to `.env.local`. Only the Supabase values are required to boot. Every other provider has a fallback, and Settings shows which ones are connected.
@@ -80,6 +98,7 @@ Copy `.env.example` to `.env.local`. Only the Supabase values are required to bo
 | `SEC_USER_AGENT` | Identifies you to SEC EDGAR, which asks every client to | A generic agent is sent |
 | `GITHUB_TOKEN` | Optional, raises GitHub's rate limit | 60 requests an hour |
 | `SUPABASE_SERVICE_KEY` | Phone capture, cron and the worker run with full access | They sign in as the demo user instead, under row level security |
+| `JOB_LIMIT_PER_HOUR`, `DEMO_HOURLY_CAP` | Hourly caps that protect provider credits on a public demo | No cap on your own machine for jobs, 15 an hour for the demo's model calls |
 | `PUBLIC_BASE_URL` | The address the phone QR code points at | The computer's local network address is used |
 
 The database uses the `vl_` table prefix, so it can share a Supabase project. Migrations are in `supabase/migrations`.
