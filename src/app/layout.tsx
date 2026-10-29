@@ -14,11 +14,11 @@ export const metadata: Metadata = {
 export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover" };
 
 // Applies the saved text size and appearance before the first paint, so there is no flash.
-const restore = `try{var s=JSON.parse(localStorage.getItem("vl-display")||"{}");var r=document.documentElement;if(s.scale)r.style.setProperty("--scale",s.scale);if(s.theme==="light"||s.theme==="dark")r.setAttribute("data-theme",s.theme)}catch(e){}`;
+const restore = `try{var s=JSON.parse(localStorage.getItem("vl-display")||"{}");var r=document.documentElement;if(s.scale)r.style.setProperty("--scale",s.scale);if(s.theme==="light"||s.theme==="dark")r.setAttribute("data-theme",s.theme);r.setAttribute("data-game",s.game||"light")}catch(e){document.documentElement.setAttribute("data-game","light")}`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${display.variable} ${body.variable} ${mono.variable}`} suppressHydrationWarning>
+    <html lang="en" data-game="light" className={`${display.variable} ${body.variable} ${mono.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: restore }} />
       </head>

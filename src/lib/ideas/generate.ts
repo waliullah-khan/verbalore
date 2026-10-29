@@ -9,6 +9,7 @@ import { docsForUseCase } from "../brain/scope";
 import { austinPosts, loadAustin } from "../signals/sources/austin";
 import { playbook, profileFor, type Playbook, type UseCaseId } from "../usecases";
 import { buildScript, type Evidence, type Idea, type Reference } from "./types";
+import { ensureLength } from "./length";
 
 type Workspace = { id: string; name: string; niche: string; offer: string; icp: string; is_demo?: boolean };
 type Profile = { niche: string; offer: string; icp: string; topic: string };
@@ -148,8 +149,10 @@ export async function generateIdeas(db: SupabaseClient, ws: Workspace, count = 5
       lap("writer");
       const byId = new Map(top.map((p) => [p.id, p]));
       ideas = await Promise.all(
-        drafts.slice(0, count).map(async (d) => {
-          const ev = d.evidence_ids.map((id) => byId.get(id)).filter((p): p is Post => !!p);
+        drafts.slice(0, count).map(async (draft) => {
+          const ev = draft.evidence_ids.map((id) => byId.get(id)).filter((p): p is Post => !!p);
+          const d = await ensureLength(draft, (ev.length ? ev : top.slice(0, 2)).map((p) => `${p.title}
+${p.text}`));
           const evidence = (ev.length ? ev : top.slice(0, 2)).map(toEvidence);
           const reference = await chooseReference(d.angle, ev.length ? ev : top.slice(0, 2), top);
           return {

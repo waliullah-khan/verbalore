@@ -96,3 +96,20 @@ h1, h2, h3, .display { font-family: var(--font-display), system-ui, sans-serif; 
 }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* game layer: Off hides it, A little shows the streak strip, Full game adds level and experience */
+html[data-game="off"] .g-on { display: none !important; }
+html:not([data-game="full"]) .g-full { display: none !important; }
+
+.ring-arc { animation: ring-in 1s ease-out both; }
+@keyframes ring-in { from { stroke-dashoffset: var(--from); } }
+
+.medal .ring { fill: none; stroke: var(--ink); stroke-width: 3; }
+.medal .face { fill: var(--paper-2); }
+.medal .arc { font-family: var(--font-mono), monospace; font-size: 8.5px; fill: var(--ink-2); letter-spacing: 0.06em; }
+.medal .glyph { font-family: var(--font-display), sans-serif; font-size: 34px; font-weight: 800; fill: var(--ink); text-anchor: middle; }
+.medal.on .face { fill: var(--accent-soft); }
+.medal.on .ring { stroke: var(--accent); }
+.medal.on svg { animation: medal-pop 0.6s cubic-bezier(0.3, 1.6, 0.5, 1) both; }
+.medal.locked svg { opacity: 0.45; filter: grayscale(1); }
+@keyframes medal-pop { from { transform: scale(0.6); opacity: 0; } }

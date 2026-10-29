@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import AutoRefresh from "@/components/AutoRefresh";
 import JobNotice from "@/components/JobNotice";
 import ScrollActive from "@/components/ScrollActive";
+import { GameStrip } from "@/components/GameBits";
 import { activeJobs, enqueue } from "@/lib/jobs";
 import { currentWorkspace } from "@/lib/workspace";
 import { PLAYBOOKS, isUseCase, playbook, THEMES } from "@/lib/usecases";
@@ -38,6 +39,7 @@ export default async function Ideas({ searchParams }: { searchParams: { uc?: str
     <div>
       <AutoRefresh active={allRunning.length > 0} />
       <JobNotice kinds={["generate_ideas"]} />
+      <GameStrip db={db} workspaceId={ws.id} />
 
       <ScrollActive className="-mx-4 flex gap-1 overflow-x-auto px-4 pb-2 md:mx-0 md:flex-wrap md:overflow-visible md:px-0" label="Use case">
         {PLAYBOOKS.map((p) => (

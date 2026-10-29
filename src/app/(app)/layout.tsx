@@ -10,6 +10,7 @@ import NavLink from "@/components/NavLink";
 const make: [string, string][] = [["/ideas", "Today"]];
 const work: [string, string][] = [
   ["/library", "Library"],
+  ["/rewards", "Rewards"],
   ["/signals", "Signals"],
   ["/brain", "Brain"],
   ["/settings", "Settings"],

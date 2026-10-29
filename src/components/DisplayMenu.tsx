@@ -5,7 +5,9 @@ import { useEffect, useState } from "react";
 const SIZES: [string, string][] = [["Standard", "1"], ["Large", "1.15"], ["Extra large", "1.3"]];
 const THEMES: [string, string][] = [["Match device", "auto"], ["Light", "light"], ["Dark", "dark"]];
 
-type Saved = { scale?: string; theme?: string };
+const GAMES: [string, string][] = [["Off", "off"], ["A little", "light"], ["Full game", "full"]];
+
+type Saved = { scale?: string; theme?: string; game?: string };
 
 function load(): Saved {
   try {
@@ -26,11 +28,13 @@ export default function DisplayMenu() {
   const [open, setOpen] = useState(false);
   const [scale, setScale] = useState("1");
   const [theme, setTheme] = useState("auto");
+  const [game, setGame] = useState("light");
 
   useEffect(() => {
     const s = load();
     if (s.scale) setScale(s.scale);
     if (s.theme) setTheme(s.theme);
+    if (s.game) setGame(s.game);
   }, []);
 
   useEffect(() => {
@@ -51,6 +55,12 @@ export default function DisplayMenu() {
     if (v === "auto") document.documentElement.removeAttribute("data-theme");
     else document.documentElement.setAttribute("data-theme", v);
     save({ ...load(), theme: v });
+  }
+
+  function pickGame(v: string) {
+    setGame(v);
+    document.documentElement.setAttribute("data-game", v);
+    save({ ...load(), game: v });
   }
 
   return (
@@ -75,6 +85,15 @@ export default function DisplayMenu() {
                 <button key={v} aria-pressed={theme === v} onClick={() => pickTheme(v)}>{label}</button>
               ))}
             </div>
+          </div>
+          <div>
+            <p className="label">Game</p>
+            <div className="seg">
+              {GAMES.map(([label, v]) => (
+                <button key={v} aria-pressed={game === v} onClick={() => pickGame(v)}>{label}</button>
+              ))}
+            </div>
+            <p className="muted mt-1.5 text-sm">{game === "off" ? "No streaks or scores anywhere." : game === "light" ? "A streak and a weekly goal." : "Level, experience and badges too."}</p>
           </div>
         </div>
       )}
