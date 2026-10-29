@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const open = ["/", "/login", "/demo", "/auth", "/v/", "/api/cron", "/api/note-view", "/_next", "/favicon"];
+const open = ["/", "/login", "/demo", "/auth", "/v/", "/r/", "/api/cron", "/api/capture", "/_next", "/favicon"];
 
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next({ request: req });

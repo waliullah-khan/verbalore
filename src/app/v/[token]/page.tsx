@@ -6,6 +6,7 @@ import type { Script } from "@/lib/ideas/types";
 type Note = { id: string; script: Script; video_path: string | null; workspace: string; contact: string | null };
 
 export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store"; // Next would otherwise cache the Supabase reads
 
 export default async function Share({ params }: { params: { token: string } }) {
   const db = supabaseServer();

@@ -3,6 +3,8 @@ import { serviceClient } from "@/lib/supabase/service";
 import { enqueue } from "@/lib/jobs";
 import { sendDigest } from "@/lib/email/digest";
 
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store"; // Next would otherwise cache the Supabase reads
 export const maxDuration = 60;
 
 // Vercel Cron calls this with the CRON_SECRET as a bearer token.

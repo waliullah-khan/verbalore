@@ -14,9 +14,9 @@ export const handlers: Record<string, Handler> = {
     const { data: ws } = await db.from("vl_workspaces").select("*").eq("id", job.workspace_id).single();
     if (!ws) throw new Error("workspace not found");
     const useCase = isUseCase(job.payload.useCase) ? job.payload.useCase : "general";
-    const { ideas, notes } = await generateIdeas(db, ws, job.payload.count ?? 5, useCase);
+    const { ideas, notes, timings } = await generateIdeas(db, ws, job.payload.count ?? 5, useCase);
     await saveIdeas(db, ws.id, ideas, useCase);
-    return { ideas: ideas.length, useCase, notes };
+    return { ideas: ideas.length, useCase, notes, timings };
   },
 
   async render_video(db, job) {

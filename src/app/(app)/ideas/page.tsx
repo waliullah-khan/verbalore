@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import AutoRefresh from "@/components/AutoRefresh";
+import ScrollActive from "@/components/ScrollActive";
 import { activeJobs, enqueue } from "@/lib/jobs";
 import { currentWorkspace } from "@/lib/workspace";
 import { PLAYBOOKS, isUseCase, playbook, THEMES } from "@/lib/usecases";
@@ -36,19 +37,19 @@ export default async function Ideas({ searchParams }: { searchParams: { uc?: str
     <div>
       <AutoRefresh active={allRunning.length > 0} />
 
-      <div className="-mx-1 flex gap-1 overflow-x-auto pb-2" role="tablist" aria-label="Use case">
+      <ScrollActive className="-mx-5 flex gap-1 overflow-x-auto px-5 pb-2 sm:mx-0 sm:px-0" label="Use case">
         {PLAYBOOKS.map((p) => (
           <Link
             key={p.id}
             href={`/ideas?uc=${p.id}`}
             role="tab"
             aria-selected={p.id === uc}
-            className={`shrink-0 rounded-full px-4 py-2 text-sm transition ${p.id === uc ? "bg-[var(--ink)] text-[var(--paper)]" : "hover:bg-[var(--paper-2)]"}`}
+            className={`shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-sm transition ${p.id === uc ? "bg-[var(--ink)] text-[var(--paper)]" : "hover:bg-[var(--paper-2)]"}`}
           >
             {p.label}
           </Link>
         ))}
-      </div>
+      </ScrollActive>
 
       <div className="mt-6 flex flex-wrap items-end justify-between gap-3">
         <div>

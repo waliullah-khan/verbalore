@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import type { Beat } from "@/lib/ideas/types";
 import { submitRecording } from "./actions";
+import PhoneHandoff, { type Arrived } from "./PhoneHandoff";
 
 type Phase = "setup" | "countdown" | "recording" | "review" | "uploading";
 
@@ -20,6 +21,7 @@ export default function Studio({ ideaId, workspaceId, title, beats, themes, note
   const [error, setError] = useState("");
   const [template, setTemplate] = useState(themes[0].id);
   const [take, setTake] = useState<{ blob: Blob; url: string; seconds: number } | null>(null);
+  const [remote, setRemote] = useState<Arrived | null>(null);
 
   const stream = useRef<MediaStream | null>(null);
   const recorder = useRef<MediaRecorder | null>(null);
@@ -125,6 +127,18 @@ export default function Studio({ ideaId, workspaceId, title, beats, themes, note
     await submitRecording({ ideaId, path, durationS: seconds, template, noteId });
   }
 
+  async function confirmRemote() {
+    if (!remote) return;
+    setPhase("uploading");
+    setError("");
+    try {
+      await submitRecording({ ideaId, path: remote.path, durationS: remote.durationS, template, noteId });
+    } catch {
+      setError("Could not start the edit. Try again.");
+      setPhase("setup");
+    }
+  }
+
   async function onFile(file: File | undefined) {
     if (!file) return;
     const video = document.createElement("video");
@@ -216,6 +230,21 @@ export default function Studio({ ideaId, workspaceId, title, beats, themes, note
               ))}
             </div>
           </div>
+
+          {remote && (
+            <div className="card space-y-3" style={{ borderColor: "var(--accent)" }}>
+              <p className="eyebrow">Take from your phone</p>
+              <video src={remote.previewUrl} controls playsInline className="mx-auto aspect-[9/16] max-h-[420px] rounded-2xl bg-black object-cover" />
+              <div className="flex flex-wrap gap-3">
+                <button className="btn btn-primary" onClick={confirmRemote} disabled={phase === "uploading"}>
+                  {phase === "uploading" ? "Starting the edit…" : "Edit this take"}
+                </button>
+                <button className="btn btn-ghost" onClick={() => setRemote(null)} disabled={phase === "uploading"}>Discard</button>
+              </div>
+            </div>
+          )}
+
+          {!remote && <PhoneHandoff ideaId={ideaId} noteId={noteId} onArrived={setRemote} />}
 
           <div className="card">
             <p className="eyebrow">Already have a video?</p>

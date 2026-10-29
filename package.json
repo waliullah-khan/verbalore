@@ -10,19 +10,22 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --test \"src/**/*.test.ts\" \"worker/**/*.test.ts\"",
     "worker": "tsx --env-file=.env.local worker/index.ts",
-    "scan:secrets": "node scripts/scan-secrets.mjs"
+    "scan:secrets": "node scripts/scan-secrets.mjs",
+    "check:keys": "tsx --env-file=.env.local scripts/check-keys.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.118.0",
     "lucide-react": "^1.64.0",
     "next": "14.2.35",
+    "qrcode": "^1.5.4",
     "react": "^18",
     "react-dom": "^18",
     "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^20",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "eslint": "^8",

@@ -16,6 +16,7 @@ Verbalore researches what your market is posting about, writes the script in you
 1. **Ideas.** Seven use-case tabs (real estate, software developers, product marketers, GTM executives, C-suite, founders, general). Each pulls what people are posting in that niche from Reddit, Hacker News, YouTube, TikTok, Instagram, LinkedIn and Facebook, scores every post against others on its own platform, drops off-topic ones, and writes five ideas. Each idea shows its evidence, one reference post picked by Jev with its hook / body / ending broken down, and a script in your voice.
 2. **Daily email.** A cron job queues the research each morning and a second one emails the five best ideas. Each has a button that opens the teleprompter.
 3. **Studio.** Camera preview, scrolling teleprompter (speed, size, mirror, pause on space), retake as often as you like, direct upload to storage. You can also upload an existing video.
+   **Record on your phone:** the Studio shows a QR code. Scan it and the phone opens a full-screen recorder with the same teleprompter, no sign-in needed. When you press send, the take uploads straight to storage and appears in the desktop Studio on its own, ready to edit. The link is single-purpose, expires after two hours, and can only upload into its own folder.
 4. **Edit.** A worker normalises the take, gets word timings, cuts the transcript into scenes, and gives every scene a graphic: hook title, stat, list, quote, tip, code window, before/after, fact tiles, call to action. The scene plan is validated, so a scene can never ship without its graphic. Each use case offers its own edit themes (editorial, kinetic type, product UI, listing, terminal, boardroom).
 5. **Library and posting.** Preview, re-edit in another style, and post to up to 15 platforms through Upload-Post, now or scheduled.
 6. **Signals.** For each account in the CRM the engine searches the web for funding, leadership changes, launches and hiring, classifies and de-duplicates what it finds, and ranks by fit and urgency. You can also add a plain-language signal to watch ("opened a new office"). Pick a signal and a contact and it writes a 30 second note, you record it, and it goes out as a share page `/v/<token>` with view tracking.
@@ -38,7 +39,11 @@ npm run worker                    # in a second terminal: research, renders, pos
 
 Open http://localhost:3000, press **Open the demo workspace**, and the seeded workspace loads.
 
-Other commands: `npm test`, `npm run typecheck`, `npm run lint`, `npm run scan:secrets` (fails if a key or `.env` file is about to be committed).
+Other commands: `npm test`, `npm run typecheck`, `npm run lint`, `npm run scan:secrets` (fails if a key or `.env` file is about to be committed), `npm run check:keys` (read-only check that each configured provider key is accepted; prints status codes, never values).
+
+### Recording from a phone
+
+A phone cannot open `localhost`, so the QR code points at your computer's address on the local network, and the phone must be on the same Wi-Fi (some campus and guest networks isolate devices and block this). Mobile browsers also only allow the live camera on `https`. Over plain `http` the phone page still works: it shows the script and opens the phone's own camera app to record, then uploads as usual. For the live teleprompter on a phone, use the deployed `https` URL, or set `PUBLIC_BASE_URL` to a tunnel address before opening the Studio.
 
 ## Reproduce the demo
 
@@ -57,6 +62,8 @@ Copy `.env.example` to `.env.local`. Only the Supabase values are required to bo
 | `RESEND_API_KEY`, `RESEND_FROM_EMAIL` | Digest and note emails | Sends are simulated and labelled as such |
 | `UPLOAD_POST_API_KEY` | Posting to 15 platforms | Posting is simulated and labelled as such |
 | `HUBSPOT_TOKEN` | Live CRM | The sample CRM is used |
+| `SUPABASE_SERVICE_KEY` | Phone capture, cron and the worker run with full access | They sign in as the demo user instead, under row level security |
+| `PUBLIC_BASE_URL` | The address the phone QR code points at | The computer's local network address is used |
 
 The database uses the `vl_` table prefix, so it can share a Supabase project. Migrations are in `supabase/migrations`.
 
@@ -120,6 +127,7 @@ That is roughly 3 to 4 times real time for the render itself, so a 45 second vid
 ## Known limitations
 
 - Without Jev and the writer model, scripts are templates and signal results are noisier. The product is meant to run with both.
+- Phone uploads go to Supabase storage, whose file size limit depends on the plan (50 MB on the free tier). The phone recorder uses 4 Mbps, which keeps about a minute of video under that. A video from the phone's own camera app can be larger.
 - Facebook has no open search, so it comes through web search and has no engagement counts.
 - Captions follow the script's timing when no speech-to-text key is set, so they drift if you ad-lib. With Cartesia they follow the speech.
 - The signal engine uses web search, so it finds what is published and indexed, not private changes. A LinkedIn-based signal would need a logged-in source.
