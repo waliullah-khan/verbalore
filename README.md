@@ -30,7 +30,10 @@ Verbalore researches what your market is posting about, writes the script in you
 | Job boards | The company's Greenhouse, Ashby, Lever, Workable or Recruitee board, read through the public API, with the publish date of each role | The board is the source of truth and is updated before the careers page or LinkedIn. Roles missing from the careers page are flagged |
 | Company website | Pricing page, homepage and blog, compared with the last scan | Changes appear on the site before they are written about |
 | GitHub | New public repositories under the company's own organization | Engineering ships before marketing announces |
+| City permits (Austin) | The City of Austin's issued-permit records on its open data portal, updated daily: new homes by ZIP, teardowns, large projects with the builder and a link to the permit, and the most active builders | A permit is issued months before a listing, a sale or a news story |
 | News and social | Web search | Reported by someone else, so it is the slowest |
+
+**Watching a place.** For real estate you watch a city instead of a company. Austin is wired: "Watch a place" reads the permit records, turns a month's activity into signals (for example "300 new-home permits in 30 days, up 22% on the month before", or a 176-unit project with its builder), and feeds the same facts to the Real estate ideas so scripts quote real local numbers. A permit signal becomes a video script in one click, and a builder named in a permit can be watched like any other organization.
 
 Each source fails on its own without taking the others down, and a signal is only ever created from something the source actually returned. Job boards are found by asking the applicant systems directly. A guessed board is accepted only when the system names the same company, or the company's own site links to it, because two companies can share a name.
 
@@ -145,7 +148,7 @@ That is roughly 3 to 4 times real time for the render itself, so a 45 second vid
 - Public job-board APIs list only published roles, so roles that are truly unlisted cannot be seen. What is visible is the full published list with exact dates, which is more than the careers page shows. "On the board but not on the careers page" is only claimed when the careers page lists jobs in its HTML; pages that load jobs with JavaScript are skipped rather than guessed at.
 - Not every company's board has a public API, and a company on an unsupported system returns no job signals.
 - Site watching only reports changes from the second scan on, because the first scan sets the baseline. Page diffs are noisy (counters, timestamps, rotating examples), so lines pass a filter and then Jev decides whether it is a real change. Expect few site signals rather than many.
-- The signal engine reads company data. Real estate has deeper public sources that are not built yet: building permits, recorded deeds and sales, and zoning changes from city and county open-data portals. Brokerages and REITs are already covered by the SEC source.
+- Austin permits are the only place source so far. Other cities each publish permits differently, so each needs its own mapping. Recorded deeds and sales (Travis County) and zoning cases are not open data in a form this reads, so they are not included. Permit counts are not sales or prices, and a permit is a plan, not a finished building.
 - Scripts quote numbers from the evidence they were built on. Check any figure against its linked source before you post it.
 - Facebook has no open search, so it comes through web search and has no engagement counts.
 - Captions follow the script's timing when no speech-to-text key is set, so they drift if you ad-lib. With Cartesia they follow the speech.

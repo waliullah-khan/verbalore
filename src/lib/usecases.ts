@@ -33,11 +33,11 @@ export const PLAYBOOKS: Playbook[] = [
     label: "Real estate",
     tagline: "Market updates, listing tours and buyer advice that bring in local leads.",
     demo: {
-      niche: "residential real estate",
+      niche: "residential real estate in Austin, Texas",
       offer: "A local agent who helps first-time buyers win in a tight market without overpaying.",
-      icp: "First-time home buyers and move-up sellers in a mid-size US metro",
+      icp: "First-time home buyers and move-up sellers in Austin, Texas",
     },
-    topic: "housing market first time home buyers",
+    topic: "Austin housing market first time home buyers",
     formats: [
       { name: "Market update", pattern: "Hook with the one number that moved. Two facts behind it. What it means for buyers or sellers. Ask them to message you." },
       { name: "Listing walkthrough", pattern: "Hook with the best feature. Price, beds, baths, square feet. One detail photos miss. Invite a showing." },

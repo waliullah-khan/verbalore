@@ -5,7 +5,8 @@ import { webSearch, hasFirecrawl } from "../research/firecrawl";
 import { jevDecide } from "../jev";
 
 import { URGENCY, type Account, type Found, type SignalKind } from "./sources/types";
-import { primarySignals } from "./sources";
+import { isPlace, primarySignals } from "./sources";
+import { resolveDomain } from "./orgs";
 import type { Board } from "./sources/jobs";
 
 export type { Account, Found, SignalKind };
@@ -176,7 +177,7 @@ export async function newsSignals(account: Account, watches: string[]): Promise<
 // (SEC filings, job boards, the company's own site, GitHub) before the news catches up.
 export async function scanAccount(account: Account, watches: string[]): Promise<{ found: Found[]; board: Board | null; notes: string[] }> {
   const [news, primary] = await Promise.all([
-    newsSignals(account, watches).catch((e: Error) => {
+    (isPlace(account) ? Promise.resolve([] as Found[]) : newsSignals(account, watches)).catch((e: Error) => {
       console.error(`news signals failed for ${account.name}:`, e.message);
       return [] as Found[];
     }),
@@ -197,6 +198,13 @@ export async function scanWorkspace(db: SupabaseClient, workspaceId: string, onl
   const bySource: Record<string, number> = {};
   const notes: string[] = [];
   for (const account of (accounts ?? []).filter((a) => !only || only.includes(a.id))) {
+    if (!account.domain && !isPlace(account)) {
+      const domain = await resolveDomain(account.name);
+      if (domain) {
+        account.domain = domain;
+        await db.from("vl_crm_accounts").update({ domain }).eq("id", account.id);
+      }
+    }
     const { found: signals, board, notes: n } = await scanAccount(account, phrases);
     notes.push(...n.map((x) => `${account.name} ${x}`));
     scanned++;
@@ -209,6 +217,7 @@ export async function scanWorkspace(db: SupabaseClient, workspaceId: string, onl
         account_id: account.id,
         kind: s.kind,
         source: s.source,
+        meta: s.meta ?? {},
         headline: s.headline,
         summary: s.summary,
         evidence_url: s.url,

@@ -1,3 +1,4 @@
+import { austinSignals } from "./austin";
 import { githubSignals } from "./github";
 import { jobSignals, type Board } from "./jobs";
 import { secSignals } from "./sec";
@@ -6,9 +7,23 @@ import type { Account, Found } from "./types";
 
 export type PrimaryResult = { found: Found[]; board: Board | null; notes: string[] };
 
+// A watched place (a city) is read from that city's own records. Only Austin is wired so far.
+export const isPlace = (a: Account) => !!(a.meta as { place?: { city?: string } } | null)?.place;
+
 // The sources that read the record directly. Each one fails on its own without taking the others down.
 export async function primarySignals(account: Account): Promise<PrimaryResult> {
   const notes: string[] = [];
+
+  if (isPlace(account)) {
+    const city = (account.meta as { place: { city: string } }).place.city;
+    if (city !== "austin") return { found: [], board: null, notes: [`${city}: no data source yet`] };
+    try {
+      return { found: await austinSignals(), board: null, notes };
+    } catch (e) {
+      return { found: [], board: null, notes: [`permits: ${(e as Error).message}`] };
+    }
+  }
+
   const [sec, jobs, site, github] = await Promise.allSettled([secSignals(account), jobSignals(account), siteSignals(account), githubSignals(account)]);
 
   const found: Found[] = [];

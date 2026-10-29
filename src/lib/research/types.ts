@@ -1,4 +1,4 @@
-export type Platform = "reddit" | "hn" | "youtube" | "tiktok" | "instagram" | "linkedin" | "facebook" | "web";
+export type Platform = "reddit" | "hn" | "youtube" | "tiktok" | "instagram" | "linkedin" | "facebook" | "web" | "permits";
 
 export type Post = {
   id: string;

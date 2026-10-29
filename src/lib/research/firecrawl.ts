@@ -23,11 +23,11 @@ async function post<T>(path: string, body: unknown, timeoutMs = 60_000): Promise
   return json;
 }
 
-export async function webSearch(query: string, opts: { limit?: number; tbs?: string; scrape?: boolean } = {}): Promise<WebHit[]> {
+export async function webSearch(query: string, opts: { limit?: number; tbs?: string; scrape?: boolean; timeoutMs?: number } = {}): Promise<WebHit[]> {
   const body: Record<string, unknown> = { query, limit: opts.limit ?? 8, sources: ["web"] };
   if (opts.tbs) body.tbs = opts.tbs;
   if (opts.scrape) body.scrapeOptions = { formats: ["markdown"], onlyMainContent: true };
-  const json = await post<{ data?: { web?: WebHit[] } | WebHit[] }>("/search", body);
+  const json = await post<{ data?: { web?: WebHit[] } | WebHit[] }>("/search", body, opts.timeoutMs);
   const data = json.data;
   const hits = Array.isArray(data) ? data : data?.web ?? [];
   return hits.map((h) => ({ url: h.url, title: h.title ?? "", description: h.description ?? "", markdown: h.markdown }));

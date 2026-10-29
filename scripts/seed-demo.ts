@@ -31,6 +31,9 @@ async function main() {
   }
 
   // Brain documents: Clearpath's belong to the GTM tab, the personas to their own tabs.
+  // persona documents are replaced each run, so edits to the fixtures take effect
+  const personaTabs = Array.from(new Set(personas.docs.map((d) => d.use_case)));
+  await db.from("vl_brain_docs").delete().eq("workspace_id", ws.id).in("use_case", personaTabs);
   const { data: have } = await db.from("vl_brain_docs").select("title,use_case").eq("workspace_id", ws.id);
   const known = new Set((have ?? []).map((d) => `${d.use_case}|${d.title}`));
   const wanted = [
@@ -43,7 +46,15 @@ async function main() {
     console.log("brain docs added", wanted.length);
   }
 
-  const { count: accts } = await db.from("vl_crm_accounts").select("id", { count: "exact", head: true }).eq("workspace_id", ws.id);
+  // the demo agent watches Austin, so the Real estate tab has local records to draw on
+  const { data: austin } = await db.from("vl_crm_accounts").select("id").eq("workspace_id", ws.id).eq("source", "place").maybeSingle();
+  if (!austin) {
+    const { error } = await db.from("vl_crm_accounts").insert({ workspace_id: ws.id, name: "Austin, TX", source: "place", meta: { place: { city: "austin" } } });
+    if (error) throw error;
+    console.log("watching Austin, TX");
+  }
+
+  const { count: accts } = await db.from("vl_crm_accounts").select("id", { count: "exact", head: true }).eq("workspace_id", ws.id).neq("source", "place");
   if (!accts) {
     const { data: accounts, error } = await db
       .from("vl_crm_accounts")

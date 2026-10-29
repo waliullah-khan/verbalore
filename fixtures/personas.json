@@ -1,7 +1,7 @@
 {
   "_note": "Synthetic brain documents for the demo workspace's other use-case tabs. Every person, product and number here is invented for the demo.",
   "docs": [
-    { "use_case": "real_estate", "kind": "note", "title": "Who I am and what I offer", "content": "I am Maya Ortiz, a residential agent in a mid-size metro. I work with first-time buyers who are nervous about making offers, and with sellers who want a clean, quick sale. I offer a free 20 minute buyer plan call. I always explain closing costs up front, before anyone tours a home." },
+    { "use_case": "real_estate", "kind": "note", "title": "Who I am and what I offer", "content": "I am Maya Ortiz, a residential agent in Austin, Texas. I work with first-time buyers who are nervous about making offers, and with sellers who want a clean, quick sale. I offer a free 20 minute buyer plan call. I always explain closing costs up front, before anyone tours a home." },
     { "use_case": "real_estate", "kind": "note", "title": "Recent results", "content": "Last quarter I closed 9 homes. Six were first-time buyers. Two of them won against several offers without waiving inspections, by writing a short personal letter and offering a flexible closing date. Average time from first call to accepted offer for buyers was about five weeks." },
     { "use_case": "real_estate", "kind": "post", "title": "Post: your offer is a story", "content": "Your offer is not just a number. It is a story the seller can picture. A short letter, clean terms and a flexible closing date beat a bigger number surprisingly often. Say it plainly. Call me before you tour a fifth house." },
 

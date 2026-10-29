@@ -6,6 +6,7 @@ import { jevDecide, pickOne } from "../jev";
 import { completeJson } from "../llm";
 import { buildVoiceProfile, measureVoice, type VoiceProfile } from "../brain/voice";
 import { docsForUseCase } from "../brain/scope";
+import { austinPosts, loadAustin } from "../signals/sources/austin";
 import { playbook, profileFor, type Playbook, type UseCaseId } from "../usecases";
 import { buildScript, type Evidence, type Idea, type Reference } from "./types";
 
@@ -77,7 +78,10 @@ async function writeWithModel(ws: Workspace, profile: Profile, pb: Playbook, voi
     `Content type: ${pb.label}. Use these script formats, one per idea where they fit:\n${pb.formats.map((f) => `- ${f.name}: ${f.pattern}`).join("\n")}`,
     `Hook patterns that work for this audience: ${pb.hooks.join(" | ")}`,
     `Their voice: ${voice.tone}. Sentences average ${voice.avgSentenceWords} words. Rules: ${voice.rules.join("; ")}.`,
-    "Use only facts from the brain notes. Do not invent statistics or customers.",
+    "Use only facts from the brain notes and the posts. Do not invent statistics or customers.",
+    'Posts from platform "permits" are official city records. When you use one of their numbers, quote it exactly and say it comes from city permit records.',
+    "Do not describe neighborhoods, commute times, schools or amenities, and do not place an address in a named area, unless a post says so. Say only what the sources say.",
+    'Posts describe other people. Never turn a story from a post into the speaker\'s own experience ("I", "we", "a client of mine") unless the brain notes say it happened to the speaker. Say "one buyer" or "a team" instead.',
     "Each script is 30 to 45 seconds spoken: a hook (one sentence, result first), two or three body lines, one CTA. Plain words, no hype, no emojis.",
     `Return JSON: {"ideas":[{"angle","hook","why_now","evidence_ids":[post ids],"method":"the script format name you used","body":[strings],"cta"}]}. Write exactly ${count} ideas, each built on different posts.`,
   ].join("\n");
@@ -104,6 +108,19 @@ export async function generateIdeas(db: SupabaseClient, ws: Workspace, count = 5
   lap("research");
   // Sample posts only stand in when a source is down. Once there is enough live material they are left out.
   const everything = results.flatMap((r) => r.posts);
+  // Real estate also draws on the city's own records for any place the workspace watches.
+  if (useCase === "real_estate") {
+    const { data: places } = await db.from("vl_crm_accounts").select("meta").eq("workspace_id", ws.id).eq("source", "place");
+    if ((places ?? []).some((p) => (p.meta as { place?: { city?: string } })?.place?.city === "austin")) {
+      try {
+        const local = austinPosts(await loadAustin());
+        everything.push(...local);
+        notes.push(`added ${local.length} Austin permit facts`);
+      } catch (e) {
+        notes.push(`austin permits unavailable: ${(e as Error).message}`);
+      }
+    }
+  }
   const live = everything.filter((p) => !p.synthetic);
   if (live.length >= 8) notes.push(`using ${live.length} live posts; sample posts left out`);
   let pool = scorePosts(dedupe(live.length >= 8 ? live : everything));

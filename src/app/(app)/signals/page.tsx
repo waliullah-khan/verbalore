@@ -3,14 +3,14 @@ import { activeJobs } from "@/lib/jobs";
 import { currentWorkspace } from "@/lib/workspace";
 import { SOURCE_LABEL, isPrimary, type Source } from "@/lib/signals/sources/types";
 import Link from "next/link";
-import { addContact, addOrganizations, addWatch, createNote, dismiss, removeOrganization, removeWatch, scan, scanOne } from "./actions";
+import { addContact, addOrganizations, addPlace, addWatch, ideaFromSignal, createNote, dismiss, removeOrganization, removeWatch, scan, scanOne } from "./actions";
 
-const KIND: Record<string, string> = { funding: "Funding", leadership: "Leadership", launch: "Launch", hiring: "Hiring", custom: "Watching", filing: "Filing", change: "Site change" };
+const KIND: Record<string, string> = { funding: "Funding", leadership: "Leadership", launch: "Launch", hiring: "Hiring", custom: "Watching", filing: "Filing", change: "Site change", permit: "Permit", market: "Market" };
 
 type Row = {
   id: string; kind: string; source: Source; headline: string; summary: string; evidence_url: string | null; detected_at: string;
-  relevance: number; urgency: number; status: string;
-  account: { id: string; name: string; domain: string | null; stage: string | null };
+  relevance: number; urgency: number; status: string; meta: { builder?: string } | null;
+  account: { id: string; name: string; domain: string | null; stage: string | null; source: string };
 };
 
 const ago = (iso: string | null) => {
@@ -22,7 +22,7 @@ const ago = (iso: string | null) => {
 export default async function Signals({ searchParams }: { searchParams: { added?: string; skipped?: string; org?: string; src?: string; only?: string } }) {
   const { db, ws } = await currentWorkspace();
   const [{ data: signals }, { data: contacts }, { data: accounts }, { data: watches }, running] = await Promise.all([
-    db.from("vl_signals").select("*, account:vl_crm_accounts(id,name,domain,stage)").eq("workspace_id", ws.id).neq("status", "dismissed"),
+    db.from("vl_signals").select("*, account:vl_crm_accounts(id,name,domain,stage,source)").eq("workspace_id", ws.id).neq("status", "dismissed"),
     db.from("vl_crm_contacts").select("id,name,title,account_id").eq("workspace_id", ws.id),
     db.from("vl_crm_accounts").select("id,name,domain,source,last_scanned_at,meta").eq("workspace_id", ws.id).order("name"),
     db.from("vl_signal_watches").select("id,phrase").eq("workspace_id", ws.id),
@@ -81,11 +81,25 @@ export default async function Signals({ searchParams }: { searchParams: { added?
         </form>
         {searchParams.added !== undefined && (
           <p className="mt-3 text-sm" style={{ color: "var(--ok)" }}>
-            Now watching {searchParams.added} new organization{searchParams.added === "1" ? "" : "s"}
-            {Number(searchParams.skipped) > 0 && `, ${searchParams.skipped} already on the list`}. The first scan is running.
+            {searchParams.added === "0"
+              ? "Already on your list, so nothing new was added."
+              : `Now watching ${searchParams.added} new organization${searchParams.added === "1" ? "" : "s"}${
+                  Number(searchParams.skipped) > 0 ? `, ${searchParams.skipped} already on the list` : ""
+                }. The first scan is running.`}
           </p>
         )}
         {searchParams.org === "empty" && <p className="mt-3 text-sm" style={{ color: "var(--warn)" }}>Type at least one organization name.</p>}
+
+        <form action={addPlace} className="mt-5 flex flex-wrap items-center gap-3 rounded-xl p-3" style={{ background: "var(--paper-2)" }}>
+          <div className="min-w-0 flex-1 text-sm">
+            <p className="font-medium">Watch a place</p>
+            <p className="muted text-xs">Reads the city&apos;s own records: new-home permits, teardowns, large projects and the builders behind them. Updated daily.</p>
+          </div>
+          <select name="city" className="field w-auto" aria-label="City">
+            <option value="austin">Austin, TX</option>
+          </select>
+          <button className="btn btn-ghost">Watch</button>
+        </form>
 
         <ul className="mt-5 divide-y" style={{ borderColor: "var(--line)" }}>
           {(accounts ?? []).map((a) => {
@@ -94,9 +108,9 @@ export default async function Signals({ searchParams }: { searchParams: { added?
               <li key={a.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3 text-sm">
                 <div className="min-w-0 flex-1">
                   <span className="font-medium">{a.name}</span>
-                  {a.domain ? <span className="muted"> · {a.domain}</span> : <span className="muted"> · no website found</span>}
+                  {a.source === "place" ? <span className="muted"> · city permit records</span> : a.domain ? <span className="muted"> · {a.domain}</span> : <span className="muted"> · no website found</span>}
                   <p className="muted text-xs">
-                    {a.source === "manual" ? "Added by you" : "Sample CRM"} · scanned {ago(a.last_scanned_at)} · <Link href={`/signals?only=${a.id}`} className="underline underline-offset-2">{countFor(a.id)} signal{countFor(a.id) === 1 ? "" : "s"}</Link>
+                    {a.source === "manual" ? "Added by you" : a.source === "place" ? "Place" : "Sample CRM"} · scanned {ago(a.last_scanned_at)} · <Link href={`/signals?only=${a.id}`} className="underline underline-offset-2">{countFor(a.id)} signal{countFor(a.id) === 1 ? "" : "s"}</Link>
                     {board && ` · job board: ${board.provider}`}
                   </p>
                 </div>
@@ -170,7 +184,20 @@ export default async function Signals({ searchParams }: { searchParams: { added?
               </p>
 
               <div className="mt-4 flex flex-wrap items-center gap-2">
-                {people.length > 0 ? (
+                {s.account.source === "place" ? (
+                  <>
+                    <form action={ideaFromSignal}>
+                      <input type="hidden" name="signal" value={s.id} />
+                      <button className="btn btn-primary">Make a video from this</button>
+                    </form>
+                    {s.meta?.builder && (
+                      <form action={addOrganizations}>
+                        <input type="hidden" name="orgs" value={s.meta.builder} />
+                        <button className="btn btn-ghost">Watch {s.meta.builder}</button>
+                      </form>
+                    )}
+                  </>
+                ) : people.length > 0 ? (
                   <form action={createNote} className="flex flex-wrap items-center gap-2">
                     <input type="hidden" name="signal" value={s.id} />
                     <select name="contact" className="field w-auto">

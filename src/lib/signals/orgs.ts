@@ -55,7 +55,7 @@ export function pickHomepage(name: string, hits: { url: string; title: string }[
 export async function resolveDomain(name: string): Promise<string | null> {
   if (!hasFirecrawl()) return null;
   try {
-    return pickHomepage(name, await webSearch(`${name} official website`, { limit: 6 }));
+    return pickHomepage(name, await webSearch(`${name} official website`, { limit: 6, timeoutMs: 20_000 }));
   } catch {
     return null;
   }

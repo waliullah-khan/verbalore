@@ -6,7 +6,8 @@ import { activeJobs, enqueue } from "@/lib/jobs";
 import { currentWorkspace } from "@/lib/workspace";
 import { writeNoteScript } from "@/lib/signals/note";
 import { sendEmail, esc } from "@/lib/email/resend";
-import { parseOrgList, resolveDomain } from "@/lib/signals/orgs";
+import { parseOrgList } from "@/lib/signals/orgs";
+import { writeSignalScript } from "@/lib/signals/place-script";
 
 export async function scan() {
   const { db, ws } = await currentWorkspace();
@@ -127,14 +128,8 @@ export async function addOrganizations(formData: FormData) {
   const have = new Set((existing ?? []).map((a) => String(a.name).toLowerCase()));
   const fresh = entries.filter((e) => !have.has(e.name.toLowerCase()));
 
-  const rows = await Promise.all(
-    fresh.map(async (e) => ({
-      workspace_id: ws.id,
-      name: e.name,
-      domain: e.domain ?? (await resolveDomain(e.name)),
-      source: "manual",
-    }))
-  );
+  // a missing website is found by the worker during the scan, so saving never waits on a search
+  const rows = fresh.map((e) => ({ workspace_id: ws.id, name: e.name, domain: e.domain, source: "manual" }));
   let created: { id: string }[] = [];
   if (rows.length) {
     const res = await db.from("vl_crm_accounts").insert(rows).select("id");
@@ -185,4 +180,51 @@ export async function addContact(formData: FormData) {
     email: String(formData.get("email") ?? "").trim().slice(0, 120) || null,
   });
   revalidatePath("/signals");
+}
+
+// A place is read from that city's own records instead of the news. Austin is the first one wired.
+const PLACES: Record<string, { name: string }> = { austin: { name: "Austin, TX" } };
+
+export async function addPlace(formData: FormData) {
+  const { db, ws } = await currentWorkspace();
+  const city = String(formData.get("city") ?? "austin");
+  const place = PLACES[city];
+  if (!place) redirect("/signals?org=empty");
+
+  const { data: have } = await db.from("vl_crm_accounts").select("id").eq("workspace_id", ws.id).eq("source", "place").eq("name", place.name).maybeSingle();
+  let id = have?.id as string | undefined;
+  if (!id) {
+    const res = await db.from("vl_crm_accounts").insert({ workspace_id: ws.id, name: place.name, source: "place", meta: { place: { city } } }).select("id").single();
+    if (res.error) throw res.error;
+    id = res.data.id;
+  }
+  await enqueue(db, ws.id, "scan_signals", { accountIds: [id] });
+  revalidatePath("/signals");
+  redirect(`/signals?added=1&skipped=${have ? 1 : 0}`);
+}
+
+// A market or permit signal becomes a script and an idea, ready to record.
+export async function ideaFromSignal(formData: FormData) {
+  const { db, ws } = await currentWorkspace();
+  const { data: s } = await db.from("vl_signals").select("*, account:vl_crm_accounts(name)").eq("id", String(formData.get("signal"))).single();
+  if (!s) throw new Error("signal not found");
+
+  const script = await writeSignalScript(db, { workspaceId: ws.id, signal: { headline: s.headline, summary: s.summary, kind: s.kind }, place: s.account.name });
+  const { data: idea, error } = await db
+    .from("vl_ideas")
+    .insert({
+      workspace_id: ws.id,
+      angle: s.headline,
+      hook: script.beats[0].text,
+      why_now: s.summary,
+      score: Math.round(s.relevance * s.urgency * 100),
+      status: "signal",
+      use_case: "real_estate",
+      evidence: [{ url: s.evidence_url, title: s.headline, platform: "permits", author: s.account.name, engagement: 0 }],
+      script,
+    })
+    .select("id")
+    .single();
+  if (error) throw error;
+  redirect(`/ideas/${idea.id}`);
 }
