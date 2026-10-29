@@ -3,25 +3,47 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --paper: #f6f1e7;
+  --paper-2: #efe7d6;
+  --card: #fbf8f1;
+  --ink: #14110f;
+  --ink-2: #5b5348;
+  --line: #ded3bd;
+  --accent: #c2410c;
+  --accent-soft: #fbe6d8;
+  --ok: #3f6212;
+  --warn: #92400e;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --paper: #14110f;
+    --paper-2: #1c1815;
+    --card: #1f1b17;
+    --ink: #f3ead9;
+    --ink-2: #a89d8a;
+    --line: #3a332b;
+    --accent: #f08a4b;
+    --accent-soft: #3a2316;
+    --ok: #a3c96b;
+    --warn: #e0a15c;
   }
 }
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
-}
+html, body { background: var(--paper); color: var(--ink); }
+body { font-family: var(--font-inter), system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+h1, h2, h3, .display { font-family: var(--font-fraunces), Georgia, serif; font-weight: 600; letter-spacing: -0.01em; }
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
+@layer components {
+  .card { @apply rounded-2xl border p-5; background: var(--card); border-color: var(--line); }
+  .btn { @apply inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition disabled:opacity-50; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { filter: brightness(1.08); }
+  .btn-ghost { border: 1px solid var(--line); color: var(--ink); background: transparent; }
+  .btn-ghost:hover { background: var(--paper-2); }
+  .chip { @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium; background: var(--paper-2); color: var(--ink-2); }
+  .muted { color: var(--ink-2); }
+  .field { @apply w-full rounded-xl border px-3 py-2 text-sm outline-none; background: var(--card); border-color: var(--line); color: var(--ink); }
+  .field:focus { border-color: var(--accent); }
+  .eyebrow { @apply text-xs font-medium uppercase; letter-spacing: 0.14em; color: var(--accent); }
 }

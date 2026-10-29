@@ -1,9 +1,9 @@
-// Jev is a typed decision model served through OpenRouter. It answers choice / noul / score
+// Jev is TypeSafe's typed decision model, called directly on their API. It answers choice / noul / score
 // questions over JSON state in ~200 ms. Its confidence ranks answers, it is not a probability,
 // so every caller keeps a deterministic fallback for a null or low-confidence result.
 
-const ENDPOINT = "https://openrouter.ai/api/alpha/decisions";
-export const JEV_MODEL = process.env.JEV_MODEL ?? "typesafe/jev-1.13";
+const endpoint = () => `${process.env.TYPESAFE_API_BASE ?? "https://api.typesafe.ai"}/v1/systemone`;
+export const JEV_MODEL = process.env.JEV_MODEL ?? "jev-latest";
 
 export type JevQuestion =
   | { type: "choice"; instructions: unknown; criteria: Record<string, unknown> }
@@ -26,11 +26,11 @@ export async function jevDecide(
   questions: Record<string, JevQuestion>,
   timeoutMs = 6000
 ): Promise<JevResult | null> {
-  const key = process.env.OPENROUTER_API_KEY;
+  const key = process.env.TYPESAFE_API_KEY;
   if (!key || !Object.keys(questions).length) return null;
   const t0 = Date.now();
   try {
-    const res = await fetch(ENDPOINT, {
+    const res = await fetch(endpoint(), {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({ model: JEV_MODEL, state, questions }),

@@ -10,7 +10,21 @@ const iso = (v: unknown) => {
   const t = typeof v === "number" ? (v > 1e12 ? v : v * 1000) : Date.parse(String(v ?? ""));
   return isFinite(t) ? new Date(t).toISOString() : null;
 };
-const clip = (s: unknown, n = 600) => String(s ?? "").replace(/\s+/g, " ").trim().slice(0, n);
+// Drops lone surrogates left by slicing through an emoji, which Postgres rejects in jsonb.
+const clean = (s: string) => s.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "");
+const clip = (s: unknown, n = 600) => clean(String(s ?? "").replace(/\s+/g, " ").trim().slice(0, n));
+
+// A caption makes a poor title: strip tags, links and emoji, then keep the first sentence.
+const headline = (s: unknown, n = 110) => {
+  const t = String(s ?? "")
+    .replace(/https?:\/\/\S+/g, "")
+    .replace(/[#@]\w+/g, "")
+    .replace(/[\p{Extended_Pictographic}\u{1D400}-\u{1D7FF}️]/gu, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const first = t.split(/(?<=[.!?])\s/)[0] ?? t;
+  return clean((first.length > 20 ? first : t).slice(0, n)).trim();
+};
 
 // Reddit blocks most server IPs on its public JSON, so Apify takes over when that happens.
 async function redditViaApify(topic: string): Promise<Post[]> {
@@ -92,7 +106,7 @@ async function tiktok(topic: string): Promise<Post[]> {
     platform: "tiktok" as const,
     url: r.webVideoUrl,
     author: r.authorMeta?.name ?? "",
-    title: clip(r.text, 160),
+    title: headline(r.text),
     text: clip(r.text),
     engagement: num(r.diggCount) + 2 * num(r.commentCount) + 3 * num(r.shareCount),
     postedAt: iso(r.createTimeISO ?? r.createTime),
@@ -108,7 +122,7 @@ async function instagram(topic: string): Promise<Post[]> {
     platform: "instagram" as const,
     url: r.url,
     author: r.ownerUsername ?? "",
-    title: clip(r.caption, 160),
+    title: headline(r.caption),
     text: clip(r.caption),
     engagement: num(r.likesCount) + 2 * num(r.commentsCount) + num(r.videoPlayCount) / 20,
     postedAt: iso(r.timestamp),
@@ -123,7 +137,7 @@ async function linkedin(topic: string): Promise<Post[]> {
     platform: "linkedin" as const,
     url: r.linkedinUrl ?? r.url,
     author: r.author?.name ?? "",
-    title: clip(r.content, 160),
+    title: headline(r.content),
     text: clip(r.content),
     engagement: num(r.engagement?.likes) + 3 * num(r.engagement?.comments) + 2 * num(r.engagement?.shares),
     postedAt: iso(r.postedAt?.timestamp ?? r.postedAt),
