@@ -1,0 +1,21 @@
+{
+  "_note": "Synthetic CRM. Accounts are real public companies so the signal engine can find real news about them. Every contact is invented and uses an example.com address.",
+  "accounts": [
+    { "name": "Clay", "domain": "clay.com", "industry": "Sales software", "size": "51-200", "stage": "Series B" },
+    { "name": "Attio", "domain": "attio.com", "industry": "CRM software", "size": "51-200", "stage": "Series B" },
+    { "name": "Ramp", "domain": "ramp.com", "industry": "Fintech", "size": "501-1000", "stage": "Series E" },
+    { "name": "Linear", "domain": "linear.app", "industry": "Developer tools", "size": "51-200", "stage": "Series B" },
+    { "name": "Vercel", "domain": "vercel.com", "industry": "Developer platform", "size": "501-1000", "stage": "Series E" },
+    { "name": "Supabase", "domain": "supabase.com", "industry": "Developer platform", "size": "201-500", "stage": "Series D" }
+  ],
+  "contacts": [
+    { "account": "Clay", "name": "Avery Brooks", "title": "VP Revenue Operations", "email": "avery.brooks@example.com" },
+    { "account": "Clay", "name": "Jordan Ellis", "title": "Head of Growth", "email": "jordan.ellis@example.com" },
+    { "account": "Attio", "name": "Morgan Reyes", "title": "Director of Sales", "email": "morgan.reyes@example.com" },
+    { "account": "Ramp", "name": "Taylor Kim", "title": "Chief Revenue Officer", "email": "taylor.kim@example.com" },
+    { "account": "Ramp", "name": "Riley Chen", "title": "Sales Operations Manager", "email": "riley.chen@example.com" },
+    { "account": "Linear", "name": "Casey Morgan", "title": "Head of Marketing", "email": "casey.morgan@example.com" },
+    { "account": "Vercel", "name": "Quinn Patel", "title": "VP Sales", "email": "quinn.patel@example.com" },
+    { "account": "Supabase", "name": "Sam Rivera", "title": "Director of Revenue Operations", "email": "sam.rivera@example.com" }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "_note": "Synthetic demo company and brain documents. Clearpath is a fictional startup.",
+  "workspace": {
+    "name": "Clearpath",
+    "niche": "B2B outbound and video prospecting",
+    "offer": "Clearpath helps RevOps teams turn account signals into short personal video notes that get replies.",
+    "icp": "RevOps and sales leaders at Series A to C B2B software companies, 20 to 300 employees"
+  },
+  "brain": [
+    {
+      "kind": "note",
+      "title": "What Clearpath does",
+      "content": "Clearpath watches the accounts in your CRM for buying signals: funding rounds, new executive hires, hiring spikes, product launches. When a signal fires, it drafts a 30 second script and a branded video note so a rep can reply in minutes instead of days. Customers report two to three times the reply rate of text-only outreach. Pricing starts at 99 dollars a seat."
+    },
+    {
+      "kind": "note",
+      "title": "Customer proof",
+      "content": "A 40 person SaaS team replaced a five step email sequence with one video note per signal and went from a 2 percent to a 7 percent reply rate in six weeks. Another customer booked 11 meetings from 60 notes sent after a funding announcement. Median time from signal to sent note is 9 minutes."
+    },
+    {
+      "kind": "post",
+      "title": "Founder post: stop sending sequences",
+      "content": "Most outbound fails in the first line. People can smell a sequence. Here is what we changed: one real reason to reach out, said out loud, in under 30 seconds. No pitch. No deck. Just 'I saw you hired a new head of sales, here is one thing I would look at first'. Reply rates tripled. It is not magic. It is relevance plus a human face."
+    },
+    {
+      "kind": "post",
+      "title": "Founder post: the three-second rule",
+      "content": "You have three seconds before someone decides if a video is for them. Start with the result, not your name. 'We booked 11 meetings from 60 notes' beats 'Hi, I'm from Clearpath' every time. Name goes last. Plain words. Short sentences. Then one clear ask."
+    },
+    {
+      "kind": "post",
+      "title": "Founder post: signals beat lists",
+      "content": "A list tells you who could buy. A signal tells you who might buy this week. Funding, hiring, a new VP, a launch. Pick two signals, watch them daily, and write to the person the moment one fires. That is the whole play."
+    }
+  ]
+}

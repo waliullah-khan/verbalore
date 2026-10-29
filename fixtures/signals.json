@@ -1,0 +1,9 @@
+{
+  "_note": "Synthetic sample signals shown before the first live scan, and as a fallback when search keys are missing. Each is badged 'sample' in the app.",
+  "signals": [
+    { "account": "Clay", "kind": "funding", "headline": "Raised a new growth round", "summary": "Sample signal: a funding announcement is a natural moment to talk about scaling outbound without scaling headcount.", "evidence_url": "https://example.com/sample/funding", "relevance": 0.86, "urgency": 0.9 },
+    { "account": "Ramp", "kind": "leadership", "headline": "New VP of Sales announced", "summary": "Sample signal: new sales leaders review tooling in their first 90 days.", "evidence_url": "https://example.com/sample/leadership", "relevance": 0.8, "urgency": 0.82 },
+    { "account": "Linear", "kind": "hiring", "headline": "Posted 6 go-to-market roles this month", "summary": "Sample signal: a hiring push in sales and marketing means outbound capacity is being built.", "evidence_url": "https://example.com/sample/hiring", "relevance": 0.72, "urgency": 0.6 },
+    { "account": "Vercel", "kind": "launch", "headline": "Launched a new enterprise product tier", "summary": "Sample signal: enterprise launches create a wave of outbound to larger accounts.", "evidence_url": "https://example.com/sample/launch", "relevance": 0.7, "urgency": 0.66 }
+  ]
+}
