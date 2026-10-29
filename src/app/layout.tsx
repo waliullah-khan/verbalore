@@ -1,10 +1,6 @@
 import type { Metadata, Viewport } from "next";
-import { Atkinson_Hyperlegible, Bricolage_Grotesque, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
-
-const display = Bricolage_Grotesque({ subsets: ["latin"], variable: "--font-display" });
-const body = Atkinson_Hyperlegible({ subsets: ["latin"], weight: ["400", "700"], variable: "--font-body" });
-const mono = IBM_Plex_Mono({ subsets: ["latin"], weight: ["500", "600"], variable: "--font-mono" });
+import "./studio.css";
 
 export const metadata: Metadata = {
   title: "Verbalore",
@@ -13,16 +9,20 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover" };
 
-// Applies the saved text size and appearance before the first paint, so there is no flash.
-const restore = `try{var s=JSON.parse(localStorage.getItem("vl-display")||"{}");var r=document.documentElement;if(s.scale)r.style.setProperty("--scale",s.scale);if(s.theme==="light"||s.theme==="dark")r.setAttribute("data-theme",s.theme);r.setAttribute("data-game",s.game||"light")}catch(e){document.documentElement.setAttribute("data-game","light")}`;
+// Applies the saved text size, appearance and game level before the first paint, so there is no flash.
+const restore = `try{var s=JSON.parse(localStorage.getItem("vl-display")||"{}");var r=document.documentElement;if(s.scale)r.style.setProperty("--scale",s.scale);if(s.theme==="light"||s.theme==="dark")r.setAttribute("data-theme",s.theme);document.body&&(document.body.dataset.game=s.game||"light")}catch(e){}`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" data-game="light" className={`${display.variable} ${body.variable} ${mono.variable}`} suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+        {/* eslint-disable-next-line @next/next/no-page-custom-font */}
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Mono:wght@500;600&display=swap" />
         <script dangerouslySetInnerHTML={{ __html: restore }} />
       </head>
-      <body>{children}</body>
+      <body data-game="light">{children}</body>
     </html>
   );
 }

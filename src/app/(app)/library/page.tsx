@@ -94,7 +94,7 @@ export default async function Library() {
                       <summary className="cursor-pointer px-4 py-3 text-sm font-medium">Post it</summary>
                       <form action={post} className="space-y-3 px-4 pb-4">
                         <input type="hidden" name="video" value={v.id} />
-                        <textarea name="caption" defaultValue={v.title} rows={2} className="field" />
+                        <textarea name="caption" defaultValue={v.title} rows={2} className="lf" />
                         <div className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-3">
                           {PLATFORMS.map((p) => (
                             <label key={p.id} className="flex items-center gap-2 text-sm">
@@ -103,7 +103,7 @@ export default async function Library() {
                           ))}
                         </div>
                         <label className="block text-sm">Schedule (optional)
-                          <input type="datetime-local" name="when" className="field mt-1" />
+                          <input type="datetime-local" name="when" className="lf mt-1" />
                         </label>
                         <button className="btn btn-primary">Post to selected</button>
                       </form>
@@ -111,7 +111,7 @@ export default async function Library() {
 
                     <form action={rerender} className="flex flex-wrap items-center gap-2">
                       <input type="hidden" name="video" value={v.id} />
-                      <select name="template" defaultValue={v.template} className="field w-auto">
+                      <select name="template" defaultValue={v.template} className="lf w-auto">
                         {themes.map((t) => <option key={t} value={t}>{THEMES[t].label}</option>)}
                       </select>
                       <button className="btn btn-ghost">Re-edit in this style</button>

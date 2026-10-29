@@ -112,19 +112,19 @@ export default function Login({ searchParams }: { searchParams: { sent?: string;
             <h2 className="text-2xl">Request access</h2>
             <div>
               <label htmlFor="name" className="label">Your name</label>
-              <input id="name" name="name" required maxLength={80} autoComplete="name" className="field" />
+              <input id="name" name="name" required maxLength={80} autoComplete="name" className="lf" />
             </div>
             <div>
               <label htmlFor="email" className="label">Work email</label>
-              <input id="email" name="email" type="email" required autoComplete="email" placeholder="you@company.com" className="field" />
+              <input id="email" name="email" type="email" required autoComplete="email" placeholder="you@company.com" className="lf" />
             </div>
             <div>
               <label htmlFor="linkedin" className="label">LinkedIn profile</label>
-              <input id="linkedin" name="linkedin" required inputMode="url" autoComplete="url" placeholder="linkedin.com/in/your-name" className="field" />
+              <input id="linkedin" name="linkedin" required inputMode="url" autoComplete="url" placeholder="linkedin.com/in/your-name" className="lf" />
             </div>
             <div>
               <label htmlFor="reason" className="label">What would you make videos about? <span className="muted font-normal">(optional)</span></label>
-              <textarea id="reason" name="reason" maxLength={400} className="field" />
+              <textarea id="reason" name="reason" maxLength={400} className="lf" />
             </div>
             <input name="company_site" tabIndex={-1} autoComplete="off" aria-hidden="true" className="hidden" />
             {error && <p role="alert" className="text-sm font-bold" style={{ color: "var(--warn)" }}>{error}</p>}
@@ -139,7 +139,7 @@ export default function Login({ searchParams }: { searchParams: { sent?: string;
           <form action={resendLink} className="grid gap-2">
             <label htmlFor="again" className="label">Already approved?</label>
             <div className="flex gap-2">
-              <input id="again" name="email" type="email" required placeholder="you@company.com" className="field" />
+              <input id="again" name="email" type="email" required placeholder="you@company.com" className="lf" />
               <button className="btn btn-ghost">Email my link</button>
             </div>
           </form>

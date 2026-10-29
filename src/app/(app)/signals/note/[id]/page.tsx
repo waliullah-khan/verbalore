@@ -48,7 +48,7 @@ export default async function NotePage({ params, searchParams }: { params: { id:
           {script.beats.map((b, i) => (
             <label key={i} className="block">
               <span className="chip">{b.label}</span>
-              <textarea name="beat" defaultValue={b.text} rows={2} className="field mt-1" />
+              <textarea name="beat" defaultValue={b.text} rows={2} className="lf mt-1" />
             </label>
           ))}
           <div className="flex flex-wrap gap-3">
@@ -79,7 +79,7 @@ export default async function NotePage({ params, searchParams }: { params: { id:
             <form action={sendNote} className="space-y-3">
               <input type="hidden" name="note" value={note.id} />
               <label className="block text-sm">Send to
-                <input name="to" type="email" defaultValue={note.contact?.email ?? ""} className="field mt-1" />
+                <input name="to" type="email" defaultValue={note.contact?.email ?? ""} className="lf mt-1" />
               </label>
               <label className="flex items-start gap-2 text-sm">
                 <input type="checkbox" name="confirm" value="yes" className="mt-1" />

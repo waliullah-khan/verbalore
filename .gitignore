@@ -55,3 +55,6 @@ next-env.d.ts
 .dev-*.log
 
 reference videos/
+
+reference/
+.next-*/

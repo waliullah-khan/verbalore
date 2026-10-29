@@ -59,7 +59,7 @@ export default async function IdeaPage({ params }: { params: { id: string } }) {
           {idea.script.beats.map((b, i) => (
             <label key={i} className="block">
               <span className="chip">{b.label}</span>
-              <textarea name="beat" defaultValue={b.text} rows={2} className="field mt-1" />
+              <textarea name="beat" defaultValue={b.text} rows={2} className="lf mt-1" />
             </label>
           ))}
           <div className="flex flex-wrap gap-3 pt-1">

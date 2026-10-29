@@ -65,15 +65,15 @@ export default async function Signals({ searchParams }: { searchParams: { added?
             name="orgs"
             rows={3}
             required
-            className="field"
+            className="lf"
             placeholder={"One per line. A name is enough, a website helps.\nRamp, ramp.com\nLinear\nhttps://attio.com"}
           />
           <details className="text-sm">
             <summary className="muted cursor-pointer">Add a contact (when watching one organization)</summary>
             <div className="mt-2 grid gap-2 sm:grid-cols-3">
-              <input name="contact_name" placeholder="Name" className="field" />
-              <input name="contact_title" placeholder="Title" className="field" />
-              <input name="contact_email" type="email" placeholder="Email" className="field" />
+              <input name="contact_name" placeholder="Name" className="lf" />
+              <input name="contact_title" placeholder="Title" className="lf" />
+              <input name="contact_email" type="email" placeholder="Email" className="lf" />
             </div>
           </details>
           <div className="flex flex-wrap items-center gap-3">
@@ -98,7 +98,7 @@ export default async function Signals({ searchParams }: { searchParams: { added?
             <p className="font-medium">Watch a place</p>
             <p className="muted text-xs">Reads the city&apos;s own records: new-home permits, teardowns, large projects and the builders behind them. Updated daily.</p>
           </div>
-          <select name="city" className="field w-auto" aria-label="City">
+          <select name="city" className="lf w-auto" aria-label="City">
             <option value="austin">Austin, TX</option>
           </select>
           <button className="btn btn-ghost">Watch</button>
@@ -148,7 +148,7 @@ export default async function Signals({ searchParams }: { searchParams: { added?
       <section className="card mt-4">
         <p className="eyebrow">Watch for something specific</p>
         <form action={addWatch} className="mt-3 flex flex-wrap gap-2">
-          <input name="phrase" placeholder="e.g. opened a new office, raised a seed round" className="field min-w-0 flex-1" />
+          <input name="phrase" placeholder="e.g. opened a new office, raised a seed round" className="lf min-w-0 flex-1" />
           <button className="btn btn-ghost">Add</button>
         </form>
         {!!watches?.length && (
@@ -217,7 +217,7 @@ export default async function Signals({ searchParams }: { searchParams: { added?
                 ) : people.length > 0 ? (
                   <form action={createNote} className="flex flex-wrap items-center gap-2">
                     <input type="hidden" name="signal" value={s.id} />
-                    <select name="contact" className="field w-auto">
+                    <select name="contact" className="lf w-auto">
                       {people.map((c) => <option key={c.id} value={c.id}>{c.name} · {c.title}</option>)}
                     </select>
                     <button className="btn btn-primary">Make a video note</button>
@@ -227,9 +227,9 @@ export default async function Signals({ searchParams }: { searchParams: { added?
                     <summary className="muted cursor-pointer">No contact yet. Add one to send a video note.</summary>
                     <form action={addContact} className="mt-2 grid gap-2 sm:grid-cols-4">
                       <input type="hidden" name="account" value={s.account.id} />
-                      <input name="name" required placeholder="Name" className="field" />
-                      <input name="title" placeholder="Title" className="field" />
-                      <input name="email" type="email" placeholder="Email" className="field" />
+                      <input name="name" required placeholder="Name" className="lf" />
+                      <input name="title" placeholder="Title" className="lf" />
+                      <input name="email" type="email" placeholder="Email" className="lf" />
                       <button className="btn btn-ghost">Add contact</button>
                     </form>
                   </details>
