@@ -25,15 +25,33 @@ export function classifyHeuristic(text: string): SignalKind | null {
 }
 
 // Profile pages, explainers and listings are about a company, not a change at it.
-const GENERIC_HOST = /(tracxn\.com|crunchbase\.com\/organization|zoominfo\.com\/c\/|owler\.com|pitchbook\.com\/profiles|linkedin\.com\/company|wikipedia\.org|g2\.com|capterra\.com|trustpilot\.com)/i;
-const GENERIC_TITLE = /^(what is|what's|how (much|to|does)|guide|pricing|review|alternatives?|about)\b/i;
+const GENERIC_HOST = /(tracxn\.com|crunchbase\.com\/organization|zoominfo\.com\/c\/|owler\.com|pitchbook\.com\/profiles|linkedin\.com\/company|wikipedia\.org|g2\.com|capterra\.com|trustpilot\.com|stockanalysis\.com|dealroom\.co\/companies|seedtable\.com\/companies|premieralts\.com|startupfundraising\.com|tldv\.io)/i;
+const GENERIC_TITLE =
+  /^(what is|what's|how|who is|guide|pricing|about)\b|\b(reviews?|alternatives?|comparison|stock price|vs\.?|versus)(\s|$|:)|company information|funding rounds?\s*(&|and)|funding,\s*investors|\bcareers\b|perks \+ culture|jobs & culture|job openings?|a story from|valuation:/i;
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 export function isGeneric(title: string, url: string): boolean {
   return title.trim().length < 12 || GENERIC_TITLE.test(title.trim()) || GENERIC_HOST.test(url);
 }
 
+// "Clay Lichterman" is a person, "Clay Raises" is a company. A capitalised word after the name that
+// is not an action word means the name belongs to someone.
+const NOT_A_SURNAME = new Set(["and", "is", "has", "vs", "just", "now", "to", "for", "the", "on", "in", "at", "with", "by", "as", "a", "an", "inc", "co", "labs", "ai", "app"]);
+const NOT_A_FIRST_NAME = new Set(["today", "why", "how", "meet", "inside", "introducing", "the", "new", "with", "and", "at", "by", "for", "from", "after", "as", "on", "in", "of", "to", "says", "when", "what", "about", "watch", "read", "join", "is"]);
+export function looksLikePerson(title: string, name: string): boolean {
+  const before = title.match(new RegExp("\\b([A-Z][a-z]+)\\s+" + escapeRe(name) + "\\b"));
+  if (before && !NOT_A_FIRST_NAME.has(before[1].toLowerCase()) && classifyHeuristic(before[1]) === null) return true;
+  const m = title.match(new RegExp(escapeRe(name) + "\\s+([A-Z][a-z]+)\\b"));
+  if (!m) return false;
+  const next = m[1];
+  return !NOT_A_SURNAME.has(next.toLowerCase()) && classifyHeuristic(next) === null;
+}
+
+const wordRe = (name: string) => new RegExp("(^|[^a-z0-9])" + escapeRe(name) + "([^a-z0-9]|$)", "i");
+
 export function mentions(text: string, name: string): boolean {
-  return text.toLowerCase().includes(name.toLowerCase());
+  return wordRe(name).test(text);
 }
 
 export function signalHash(accountId: string, kind: string, url: string): string {
@@ -109,7 +127,7 @@ export async function findSignals(account: Account, watches: string[]): Promise<
     } catch {
       continue;
     }
-    hits = hits.filter((h) => !seen.has(h.url) && !isGeneric(h.title, h.url) && mentions(`${h.title} ${h.snippet}`, account.name));
+    hits = hits.filter((h) => !seen.has(h.url) && !isGeneric(h.title, h.url) && mentions(h.title, account.name) && !looksLikePerson(h.title, account.name));
     hits.forEach((h) => seen.add(h.url));
     if (!hits.length) continue;
 
@@ -124,9 +142,9 @@ export async function findSignals(account: Account, watches: string[]): Promise<
         kind = j.kind as SignalKind;
         relevance = Math.min(0.99, 0.55 + 0.4 * j.confidence);
       } else {
-        kind = hint === "custom" ? "custom" : classifyHeuristic(text) ?? hint;
+        kind = hint === "custom" ? "custom" : classifyHeuristic(text);
         if (!kind) return;
-        relevance = 0.5 + (hint && kind === hint ? 0.2 : 0) + (mentions(h.title, account.name) ? 0.15 : 0);
+        relevance = 0.55 + (kind === hint ? 0.2 : 0) + (h.date ? 0.1 : 0);
       }
       found.push({
         kind,
@@ -139,7 +157,15 @@ export async function findSignals(account: Account, watches: string[]): Promise<
       });
     });
   }
-  return found.sort((a, b) => b.relevance * b.urgency - a.relevance * a.urgency).slice(0, 6);
+  const perKind = new Map<string, number>();
+  return found
+    .sort((a, b) => b.relevance * b.urgency - a.relevance * a.urgency)
+    .filter((f) => {
+      const n = perKind.get(f.kind) ?? 0;
+      perKind.set(f.kind, n + 1);
+      return n < 2;
+    })
+    .slice(0, 6);
 }
 
 export async function scanWorkspace(db: SupabaseClient, workspaceId: string, only?: string[]) {
