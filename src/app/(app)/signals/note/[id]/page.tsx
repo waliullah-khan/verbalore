@@ -4,7 +4,7 @@ import AutoRefresh from "@/components/AutoRefresh";
 import { currentWorkspace } from "@/lib/workspace";
 import { hasResend } from "@/lib/email/resend";
 import type { Script } from "@/lib/ideas/types";
-import { saveNoteScript, sendNote } from "../../actions";
+import { retryScript, saveNoteScript, sendNote } from "../../actions";
 
 const errors: Record<string, string> = {
   email: "That does not look like an email address.",
@@ -32,68 +32,102 @@ export default async function NotePage({ params, searchParams }: { params: { id:
   const base = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
   return (
-    <div className="space-y-6">
-      <AutoRefresh active={!!pending && !note.video_id && pending.status !== "failed"} />
-      <Link href="/signals" className="muted text-sm">← Signals</Link>
-      <div>
-        <p className="eyebrow">{note.signal?.account?.name} · {note.signal?.kind}</p>
-        <h1 className="mt-1 text-4xl leading-tight">Video note for {note.contact?.name}</h1>
-        <p className="muted mt-2">{note.contact?.title} · because: {note.signal?.headline}</p>
+    <section className="screen" data-screen="signals">
+      <AutoRefresh active={script.state === "writing" || (!!pending && !note.video_id && pending.status !== "failed")} />
+      <p style={{ marginBottom: "1rem" }}>
+        <Link href="/signals" className="btn quiet sm">Back to Signals</Link>
+      </p>
+
+      <div className="card" style={{ marginBottom: "1rem" }}>
+        <p className="lab">{note.signal?.account?.name} · {note.signal?.kind}</p>
+        <h2 style={{ marginTop: ".3rem" }}>Video note for {note.contact?.name}</h2>
+        <p className="muted" style={{ marginTop: ".4rem" }}>{note.contact?.title} · because: {note.signal?.headline}</p>
       </div>
 
-      <section className="card">
-        <p className="eyebrow">Script · about {script.totalSeconds}s</p>
-        <form action={saveNoteScript} className="mt-3 space-y-3">
-          <input type="hidden" name="note" value={note.id} />
-          {script.beats.map((b, i) => (
-            <label key={i} className="block">
-              <span className="chip">{b.label}</span>
-              <textarea name="beat" defaultValue={b.text} rows={2} className="field mt-1" />
-            </label>
-          ))}
-          <div className="flex flex-wrap gap-3">
-            <button className="btn btn-ghost">Save changes</button>
-            {note.idea_id && !note.video_id && <Link href={`/studio/${note.idea_id}?note=${note.id}`} className="btn btn-primary">Record it</Link>}
-          </div>
-        </form>
-      </section>
-
       {pending && !note.video_id && (
-        <p className="card text-sm">{pending.status === "failed" ? "The edit failed. Record again from the button above." : "Your note is being edited. This page updates when it is ready."}</p>
+        <p className="card" role="status" style={{ marginBottom: "1rem" }}>
+          {pending.status === "failed" ? "The edit failed. Record again from the button below." : "Your note is being edited. This page updates when it is ready."}
+        </p>
       )}
 
-      {url && (
-        <section className="card grid gap-5 md:grid-cols-[220px_1fr]">
-          <div className="aspect-[9/16] w-full max-w-[220px] overflow-hidden rounded-2xl bg-black">
-            <video src={url} controls playsInline preload="metadata" className="h-full w-full object-cover" />
+      <div className="postgrid">
+        {script.state ? (
+          <div className="card" role="status">
+            <p className="lab">{script.state === "writing" ? "Writing your script" : "The script could not be written"}</p>
+            {script.state === "writing" ? (
+              <p style={{ marginTop: ".5rem" }}>Writing your script… A proper note takes about a minute to draft and check against what we know. This page fills in by itself.</p>
+            ) : (
+              <>
+                <p style={{ marginTop: ".5rem" }}>{script.error ?? "Something went wrong while writing it."}</p>
+                {note.idea_id && script.retry && (
+                  <form action={retryScript} style={{ marginTop: ".75rem" }}>
+                    <input type="hidden" name="idea" value={note.idea_id} />
+                    <button className="btn primary">Try again</button>
+                  </form>
+                )}
+              </>
+            )}
           </div>
-          <div className="space-y-4">
-            <div>
-              <p className="eyebrow">Share page</p>
-              <p className="mt-1 break-all text-sm">{base}/v/{note.token}</p>
-              <p className="muted mt-1 text-sm">
-                {views ?? 0} view{views === 1 ? "" : "s"}{note.sent_at && ` · sent to ${note.sent_to} on ${new Date(note.sent_at).toLocaleString()}`}
-              </p>
+        ) : (
+        <div className="card">
+          <p className="lab">Script, about {script.totalSeconds} seconds</p>
+          <form action={saveNoteScript} style={{ marginTop: ".75rem" }}>
+            <input type="hidden" name="note" value={note.id} />
+            {script.beats.map((b, i) => (
+              <div className="field" key={i}>
+                <label htmlFor={`beat-${i}`}><span className="pill">{b.label}</span></label>
+                <textarea id={`beat-${i}`} name="beat" defaultValue={b.text} rows={2} />
+              </div>
+            ))}
+            <div style={{ display: "flex", gap: ".6rem", flexWrap: "wrap" }}>
+              <button className="btn">Save changes</button>
+              {note.idea_id && !note.video_id && <Link href={`/studio/${note.idea_id}?note=${note.id}`} className="btn primary">Record it</Link>}
+            </div>
+          </form>
+        </div>
+        )}
+
+        {url && (
+          <aside className="sumside">
+            <div className="card">
+              <div className="sumrow">
+                <video src={url} controls playsInline preload="metadata" style={{ width: "9rem", aspectRatio: "9/16", objectFit: "cover", borderRadius: ".8rem", border: "2px solid var(--ink)", background: "#000" }} />
+                <div style={{ display: "grid", gap: ".5rem", alignContent: "start", minWidth: 0 }}>
+                  <b>Share page</b>
+                  <span className="muted mono" style={{ fontSize: ".8rem", overflowWrap: "anywhere" }}>{base}/v/{note.token}</span>
+                  <span className="muted" style={{ fontSize: ".9rem" }}>
+                    {views ?? 0} view{views === 1 ? "" : "s"}
+                    {note.sent_at && ` · sent to ${note.sent_to} on ${new Date(note.sent_at).toLocaleString()}`}
+                  </span>
+                </div>
+              </div>
             </div>
 
-            <form action={sendNote} className="space-y-3">
+            <form action={sendNote} className="card" style={{ display: "grid", gap: ".75rem" }}>
               <input type="hidden" name="note" value={note.id} />
-              <label className="block text-sm">Send to
-                <input name="to" type="email" defaultValue={note.contact?.email ?? ""} className="field mt-1" />
-              </label>
-              <label className="flex items-start gap-2 text-sm">
-                <input type="checkbox" name="confirm" value="yes" className="mt-1" />
-                <span>I confirm this goes to a real person and I am happy to send it.</span>
-              </label>
-              <button className="btn btn-primary">Send the note</button>
-              {!hasResend() && <p className="muted text-xs">No Resend key is set, so sending is simulated.</p>}
+              <div className="lab">Send it to one person</div>
+              <div className="field" style={{ margin: 0 }}>
+                <label htmlFor="to">Send to</label>
+                <input id="to" type="text" name="to" inputMode="email" autoComplete="email" defaultValue={note.contact?.email ?? ""} />
+              </div>
+              <div className="when">
+                <label>
+                  <input type="checkbox" name="confirm" value="yes" />
+                  <span>I confirm this goes to a real person.</span>
+                </label>
+              </div>
+              <button className="btn primary lg">Send the note</button>
+              {!hasResend() && <p className="muted" style={{ fontSize: ".85rem" }}>No Resend key is set, so sending is simulated.</p>}
+              {searchParams.error && <p role="alert" style={{ color: "var(--warn)", fontWeight: 700 }}>{errors[searchParams.error]}</p>}
+              {searchParams.sent && (
+                <p role="status" style={{ color: "var(--ok)", fontWeight: 700 }}>
+                  {searchParams.sent === "simulated" ? "Marked as sent (simulated, no email key)." : "Sent."}
+                </p>
+              )}
             </form>
-
-            {searchParams.error && <p className="text-sm" style={{ color: "var(--warn)" }}>{errors[searchParams.error]}</p>}
-            {searchParams.sent && <p className="text-sm" style={{ color: "var(--ok)" }}>{searchParams.sent === "simulated" ? "Marked as sent (simulated, no email key)." : "Sent."}</p>}
-          </div>
-        </section>
-      )}
-    </div>
+          </aside>
+        )}
+      </div>
+    </section>
   );
 }

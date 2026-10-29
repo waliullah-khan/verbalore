@@ -1,6 +1,7 @@
 import { serviceClient } from "@/lib/supabase/service";
 import { isExpired } from "@/lib/capture";
 import PhoneRecorder from "./PhoneRecorder";
+import "./phone.css";
 
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store"; // Next would otherwise cache the Supabase reads
@@ -8,9 +9,8 @@ export const metadata = { title: "Record · Verbalore" };
 
 function Message({ title, body }: { title: string; body: string }) {
   return (
-    <main className="mx-auto flex min-h-[100dvh] max-w-sm flex-col justify-center px-6 text-center">
-      <h1 className="text-2xl">{title}</h1>
-      <p className="muted mt-2 text-sm">{body}</p>
+    <main className="phone-shell">
+      <section className="ph" data-ph="0"><div className="ph-card"><b>{title}</b><p>{body}</p></div></section>
     </main>
   );
 }

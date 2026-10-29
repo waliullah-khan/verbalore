@@ -2,128 +2,92 @@ import { notFound } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { currentWorkspace } from "@/lib/workspace";
 import { requireAdmin } from "@/lib/admin";
-import { approveRequest, denyRequest, inviteLink, isAdmin, type AccessRequest } from "@/lib/access";
-import { esc, sendEmail } from "@/lib/email/resend";
-import CopyLink from "@/components/CopyLink";
+import { isAdmin } from "@/lib/access";
+import { videoLimit } from "@/lib/allowance";
 
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 
-async function approve(formData: FormData) {
+type Profile = { user_id: string; workspace_id: string | null; full_name: string; email: string; linkedin_url: string; website: string | null; onboarded_at: string | null; created_at: string };
+
+// Turning an account off bans the user, so a session that is already open stops working too.
+async function setOff(formData: FormData) {
   "use server";
   const db = await requireAdmin();
-  const result = await approveRequest(db, String(formData.get("id")));
-  // the person is emailed only when a sender has been chosen; otherwise the link below is sent by hand
-  if ("link" in result && process.env.RESEND_FROM_EMAIL) {
-    const { data: r } = await db.from("vl_access_requests").select("email,full_name").eq("id", String(formData.get("id"))).single();
-    if (r) {
-      await sendEmail({
-        to: r.email,
-        subject: "You are in: your Verbalore sign-in link",
-        html: `<p>Hi ${esc(r.full_name || "there")},</p><p>Your request was approved.</p><p><a href="${result.link}">Open Verbalore</a></p>`,
-      }).catch(() => undefined);
-    }
-  }
+  const id = String(formData.get("id"));
+  const { data: target } = await db.auth.admin.getUserById(id);
+  if (isAdmin(target.user?.email)) return;
+  await db.auth.admin.updateUserById(id, { ban_duration: formData.get("off") === "yes" ? "876000h" : "none" });
   revalidatePath("/admin/access");
 }
 
-async function deny(formData: FormData) {
-  "use server";
-  const db = await requireAdmin();
-  await denyRequest(db, String(formData.get("id")));
-  revalidatePath("/admin/access");
-}
+const when = (iso: string) => new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+const shortUrl = (u: string) => u.replace(/^https?:\/\/(www\.)?/, "");
 
-const when = (iso: string) =>
-  new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-
-function Request({ r }: { r: AccessRequest }) {
-  const live = r.status === "approved" && r.invite_token && r.invite_expires_at && new Date(r.invite_expires_at) > new Date();
-  return (
-    <li className="card grid gap-3">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <h3 className="text-xl">{r.full_name || r.email}</h3>
-          <p className="muted text-sm">{r.email} · asked {when(r.created_at)}</p>
-        </div>
-        <span
-          className="chip"
-          style={r.status === "approved" ? { background: "var(--ok-soft)", color: "var(--ok)" } : r.status === "denied" ? { color: "var(--warn)" } : { background: "var(--accent-soft)", color: "var(--accent)" }}
-        >
-          {r.status}
-        </span>
-      </div>
-      {r.linkedin_url && (
-        <p>
-          <a href={r.linkedin_url} target="_blank" rel="noopener noreferrer" className="font-bold underline underline-offset-4">{r.linkedin_url.replace(/^https:\/\/(www\.)?/, "")}</a>
-        </p>
-      )}
-      {r.reason && <p className="muted">&ldquo;{r.reason}&rdquo;</p>}
-
-      {live && (
-        <div className="grid gap-1.5">
-          <p className="label">Their personal sign-in link {process.env.RESEND_FROM_EMAIL ? "(also emailed)" : "(send it to them yourself)"}</p>
-          <CopyLink value={inviteLink(r.invite_token as string)} />
-          <p className="muted text-xs">Works until {when(r.invite_expires_at as string)}.</p>
-        </div>
-      )}
-
-      <div className="flex flex-wrap gap-2">
-        {r.status !== "approved" && (
-          <form action={approve}>
-            <input type="hidden" name="id" value={r.id} />
-            <button className="btn btn-primary">{r.status === "denied" ? "Approve after all" : "Approve"}</button>
-          </form>
-        )}
-        {r.status === "approved" && (
-          <form action={approve}>
-            <input type="hidden" name="id" value={r.id} />
-            <button className="btn btn-ghost">New link</button>
-          </form>
-        )}
-        {r.status !== "denied" && (
-          <form action={deny}>
-            <input type="hidden" name="id" value={r.id} />
-            <button className="btn btn-danger">{r.status === "approved" ? "Remove access" : "Deny"}</button>
-          </form>
-        )}
-      </div>
-    </li>
-  );
-}
-
-export default async function AccessRequests() {
+export default async function Accounts() {
   const { user } = await currentWorkspace();
   if (!isAdmin(user.email)) notFound();
 
   const db = await requireAdmin();
-  const { data } = await db.from("vl_access_requests").select("*").order("created_at", { ascending: false }).limit(200);
-  const all = (data ?? []) as AccessRequest[];
-  const pending = all.filter((r) => r.status === "pending");
-  const decided = all.filter((r) => r.status !== "pending");
+  const { data } = await db.from("vl_profiles").select("*").order("created_at", { ascending: false }).limit(300);
+  const people = (data ?? []) as Profile[];
+
+  const [{ data: users }, { data: videos }] = await Promise.all([
+    db.auth.admin.listUsers({ page: 1, perPage: 1000 }),
+    people.length
+      ? db.from("vl_videos").select("workspace_id,status,output_path").in("workspace_id", people.map((p) => p.workspace_id).filter(Boolean) as string[])
+      : Promise.resolve({ data: [] as { workspace_id: string; status: string; output_path: string | null }[] }),
+  ]);
+  const off = new Set((users?.users ?? []).filter((u) => u.banned_until && new Date(u.banned_until) > new Date()).map((u) => u.id));
+  // a video that failed before it made a file does not use a slot, the same rule the allowance uses
+  const used = new Map<string, number>();
+  for (const v of videos ?? []) if (v.status !== "failed" || v.output_path) used.set(v.workspace_id, (used.get(v.workspace_id) ?? 0) + 1);
+  const limit = videoLimit();
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div>
         <p className="eyebrow">Admin</p>
-        <h1 className="mt-1 text-[2rem]">Access requests</h1>
-        <p className="muted mt-1">Approving makes an account and a workspace, and gives you a personal link to send them.</p>
+        <h1 className="mt-1 text-[2rem]">Accounts</h1>
+        <p className="muted mt-1">
+          {people.length} {people.length === 1 ? "account" : "accounts"} signed up. Anyone can sign up, and each account can make {limit} videos. Turn one off if it is being misused.
+        </p>
       </div>
 
-      <section className="space-y-3">
-        <h2 className="text-xl">Waiting for you <span className="muted mono text-base">{pending.length}</span></h2>
-        {pending.length ? (
-          <ul className="grid gap-3">{pending.map((r) => <Request key={r.id} r={r} />)}</ul>
-        ) : (
-          <p className="card muted">Nobody is waiting.</p>
-        )}
-      </section>
-
-      {decided.length > 0 && (
-        <section className="space-y-3">
-          <h2 className="text-xl">Decided</h2>
-          <ul className="grid gap-3">{decided.map((r) => <Request key={r.id} r={r} />)}</ul>
-        </section>
+      {people.length ? (
+        <ul className="grid gap-3">
+          {people.map((p) => {
+            const n = p.workspace_id ? used.get(p.workspace_id) ?? 0 : 0;
+            const isOff = off.has(p.user_id);
+            return (
+              <li key={p.user_id} className="card grid gap-3">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <h3 className="text-xl">{p.full_name || p.email}</h3>
+                    <p className="muted text-sm">{p.email} · joined {when(p.created_at)}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="chip" style={isOff ? { color: "var(--warn)" } : { background: "var(--ok-soft)", color: "var(--ok)" }}>{isOff ? "turned off" : "active"}</span>
+                    <span className="chip">{p.onboarded_at ? "brand brain built" : "not set up yet"}</span>
+                    <span className="chip mono">{n} of {limit} videos</span>
+                  </div>
+                </div>
+                <p className="text-sm">
+                  {p.linkedin_url && <a href={p.linkedin_url} target="_blank" rel="noopener noreferrer" className="font-bold underline underline-offset-4">{shortUrl(p.linkedin_url)}</a>}
+                  {p.website && <> · <a href={p.website} target="_blank" rel="noopener noreferrer" className="font-bold underline underline-offset-4">{shortUrl(p.website)}</a></>}
+                  {!p.website && <span className="muted"> · no company website</span>}
+                </p>
+                <form action={setOff} className="flex gap-2">
+                  <input type="hidden" name="id" value={p.user_id} />
+                  <input type="hidden" name="off" value={isOff ? "no" : "yes"} />
+                  <button className={isOff ? "btn btn-primary" : "btn btn-danger"}>{isOff ? "Turn account back on" : "Turn account off"}</button>
+                </form>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="card muted">Nobody has signed up yet.</p>
       )}
     </div>
   );

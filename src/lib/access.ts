@@ -96,3 +96,47 @@ export async function denyRequest(db: SupabaseClient, id: string) {
     .update({ status: "denied", invite_token: null, invite_expires_at: null, decided_at: new Date().toISOString() })
     .eq("id", id);
 }
+
+// ---- self-serve sign-up ----
+
+const WEAK = new Set(["password", "password1", "12345678", "123456789", "qwertyui", "qwerty123", "iloveyou", "11111111", "abcdefgh"]);
+
+export type SignupInput = { name: string; email: string; linkedin: string; password: string };
+export type SignupError = "name" | "email" | "linkedin" | "password";
+
+// The sign-up form is small on purpose: a name, an email, a LinkedIn profile and a password.
+export function validateSignup(raw: SignupInput): { ok: true; value: SignupInput } | { ok: false; error: SignupError } {
+  const name = raw.name.trim().replace(/\s+/g, " ").slice(0, 80);
+  const email = raw.email.trim().toLowerCase();
+  const linkedin = cleanLinkedIn(raw.linkedin);
+  const password = raw.password;
+  if (!name) return { ok: false, error: "name" };
+  if (!isEmail(email)) return { ok: false, error: "email" };
+  if (!linkedin) return { ok: false, error: "linkedin" };
+  // 72 is the most characters the password hash looks at
+  if (password.length < 8 || password.length > 72 || password.toLowerCase() === email || WEAK.has(password.toLowerCase()) || /^(.)\1+$/.test(password)) {
+    return { ok: false, error: "password" };
+  }
+  return { ok: true, value: { name, email, linkedin, password } };
+}
+
+export const firstName = (name: string) => name.trim().split(/\s+/)[0] || "Your";
+
+// A workspace made at sign-up is named after the person until the company name is known.
+export const autoWorkspaceName = (name: string) => `${firstName(name)}'s workspace`;
+export const isAutoWorkspaceName = (name: string) => /'s workspace$/i.test(name.trim());
+
+// "acme.com", "www.acme.com/about" or "https://acme.com" all become https://acme.com. Blank means no website.
+export function normaliseWebsite(raw: string): string | null {
+  const v = raw.trim();
+  if (!v) return null;
+  try {
+    const u = new URL(/^https?:\/\//i.test(v) ? v : `https://${v}`);
+    if (!/^https?:$/.test(u.protocol) || !u.hostname.includes(".")) return null;
+    return `${u.protocol}//${u.hostname.toLowerCase()}`;
+  } catch {
+    return null;
+  }
+}
+
+export const linkedinKind = (url: string): "person" | "company" => (/linkedin\.com\/company\//i.test(url) ? "company" : "person");

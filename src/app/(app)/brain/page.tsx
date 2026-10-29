@@ -76,23 +76,23 @@ export default async function Brain() {
       <div className="grid gap-4 md:grid-cols-2">
         <form action={addNote} className="card space-y-3">
           <p className="eyebrow">Add text</p>
-          <input name="title" placeholder="Title" className="field" />
-          <select name="kind" className="field">
+          <input name="title" placeholder="Title" className="lf" />
+          <select name="kind" className="lf">
             <option value="note">Note about my business</option>
             <option value="post">One of my posts or scripts</option>
           </select>
           <label className="block text-sm">Applies to
-            <select name="use_case" className="field mt-1">
+            <select name="use_case" className="lf mt-1">
               <option value="">Everything</option>
               {PLAYBOOKS.map((p) => <option key={p.id} value={p.id}>{p.label} only</option>)}
             </select>
           </label>
-          <textarea name="content" rows={5} placeholder="Paste anything" className="field" required />
+          <textarea name="content" rows={5} placeholder="Paste anything" className="lf" required />
           <button className="btn btn-primary">Save to brain</button>
         </form>
         <form action={addLink} className="card space-y-3">
           <p className="eyebrow">Add a page</p>
-          <input name="url" type="url" placeholder="https://your-site.com/about" className="field" required />
+          <input name="url" type="url" placeholder="https://your-site.com/about" className="lf" required />
           <p className="muted text-sm">Your site, a case study or a podcast page. It is read and stored.</p>
           <button className="btn btn-primary">Read this page</button>
         </form>

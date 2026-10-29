@@ -65,10 +65,10 @@ export default async function Settings({ searchParams }: { searchParams: { diges
 
       <form action={saveProfile} className="card space-y-3">
         <p className="eyebrow">What you do</p>
-        <label className="block text-sm">Niche<input name="niche" defaultValue={ws.niche} className="field mt-1" /></label>
-        <label className="block text-sm">Offer<textarea name="offer" defaultValue={ws.offer} rows={2} className="field mt-1" /></label>
-        <label className="block text-sm">Audience<input name="icp" defaultValue={ws.icp} className="field mt-1" /></label>
-        <label className="block text-sm">Send my daily ideas to<input name="digest_email" type="email" defaultValue={ws.digest_email ?? ""} className="field mt-1" /></label>
+        <label className="block text-sm">Niche<input name="niche" defaultValue={ws.niche} className="lf mt-1" /></label>
+        <label className="block text-sm">Offer<textarea name="offer" defaultValue={ws.offer} rows={2} className="lf mt-1" /></label>
+        <label className="block text-sm">Audience<input name="icp" defaultValue={ws.icp} className="lf mt-1" /></label>
+        <label className="block text-sm">Send my daily ideas to<input name="digest_email" type="email" defaultValue={ws.digest_email ?? ""} className="lf mt-1" /></label>
         <div className="flex flex-wrap gap-3"><button className="btn btn-primary">Save</button></div>
       </form>
 

@@ -4,10 +4,10 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { activeJobs, enqueue } from "@/lib/jobs";
 import { currentWorkspace } from "@/lib/workspace";
-import { writeNoteScript } from "@/lib/signals/note";
+import type { Script } from "@/lib/ideas/types";
+import { rebuildScript } from "@/lib/ideas/types";
 import { sendEmail, esc } from "@/lib/email/resend";
 import { parseOrgList } from "@/lib/signals/orgs";
-import { writeSignalScript } from "@/lib/signals/place-script";
 import { demoCapReached } from "@/lib/limits";
 
 export async function scan() {
@@ -47,25 +47,20 @@ export async function createNote(formData: FormData) {
   const { data: contact } = await db.from("vl_crm_contacts").select("*").eq("id", contactId).single();
   if (!signal || !contact) throw new Error("signal or contact missing");
 
-  const script = await writeNoteScript(db, {
-    workspace: { id: ws.id, name: ws.name, offer: ws.offer },
-    account: { name: signal.account.name },
-    contact: { name: contact.name, title: contact.title },
-    signal: { kind: signal.kind, headline: signal.headline, summary: signal.summary },
-  });
-
+  // a proper script takes a minute to write and check, so the page opens now and shows it when it is ready
+  const writing: Script = { method: "Video note", beats: [], totalSeconds: 0, state: "writing" };
   const { data: idea, error } = await db
     .from("vl_ideas")
     .insert({
       workspace_id: ws.id,
       angle: `Video note for ${contact.name} at ${signal.account.name}`,
-      hook: script.beats[0].text,
+      hook: signal.headline,
       why_now: signal.headline,
       score: Math.round(signal.relevance * signal.urgency * 100),
       status: "note",
       use_case: "gtm",
       evidence: [{ url: signal.evidence_url, title: signal.headline, platform: "web", author: signal.account.name, engagement: 0 }],
-      script,
+      script: writing,
     })
     .select("id")
     .single();
@@ -73,10 +68,11 @@ export async function createNote(formData: FormData) {
 
   const { data: note, error: nErr } = await db
     .from("vl_video_notes")
-    .insert({ workspace_id: ws.id, signal_id: signalId, contact_id: contactId, script, idea_id: idea.id })
+    .insert({ workspace_id: ws.id, signal_id: signalId, contact_id: contactId, script: writing, idea_id: idea.id })
     .select("id")
     .single();
   if (nErr) throw nErr;
+  await enqueue(db, ws.id, "write_script", { kind: "note", ideaId: idea.id, noteId: note.id, signalId });
   redirect(`/signals/note/${note.id}`);
 }
 
@@ -109,15 +105,13 @@ export async function sendNote(formData: FormData) {
 
 export async function saveNoteScript(formData: FormData) {
   const { db } = await currentWorkspace();
-  const { buildScript } = await import("@/lib/ideas/types");
   const id = String(formData.get("note"));
   const texts = formData.getAll("beat").map(String).map((t) => t.trim()).filter(Boolean);
   if (texts.length < 2) return;
-  const [hook, ...rest] = texts;
-  const cta = rest.pop() as string;
-  const script = buildScript("Video note", hook, rest, cta);
+  const { data: before } = await db.from("vl_video_notes").select("script").eq("id", id).single();
+  const script = rebuildScript(before?.script as Script | null, texts);
   const { data: note } = await db.from("vl_video_notes").update({ script }).eq("id", id).select("idea_id").single();
-  if (note?.idea_id) await db.from("vl_ideas").update({ script, hook }).eq("id", note.idea_id);
+  if (note?.idea_id) await db.from("vl_ideas").update({ script, hook: texts[0] }).eq("id", note.idea_id);
   revalidatePath(`/signals/note/${id}`);
 }
 
@@ -207,29 +201,47 @@ export async function addPlace(formData: FormData) {
   redirect(`/signals?added=1&skipped=${have ? 1 : 0}`);
 }
 
-// A market or permit signal becomes a script and an idea, ready to record.
+// A market or permit signal becomes an idea. The script is long enough to need a minute of writing and checking,
+// so the idea exists at once and the worker fills the script in.
 export async function ideaFromSignal(formData: FormData) {
   const { db, ws } = await currentWorkspace();
   if (await demoCapReached(db, ws, "vl_ideas", { column: "status", value: "signal" })) redirect("/signals?org=limit");
-  const { data: s } = await db.from("vl_signals").select("*, account:vl_crm_accounts(name)").eq("id", String(formData.get("signal"))).single();
+  const signalId = String(formData.get("signal"));
+  const { data: s } = await db.from("vl_signals").select("*, account:vl_crm_accounts(name)").eq("id", signalId).single();
   if (!s) throw new Error("signal not found");
 
-  const script = await writeSignalScript(db, { workspaceId: ws.id, signal: { headline: s.headline, summary: s.summary, kind: s.kind }, place: s.account.name });
+  const writing: Script = { method: "Local market update", beats: [], totalSeconds: 0, state: "writing" };
   const { data: idea, error } = await db
     .from("vl_ideas")
     .insert({
       workspace_id: ws.id,
       angle: s.headline,
-      hook: script.beats[0].text,
+      hook: s.headline,
       why_now: s.summary,
       score: Math.round(s.relevance * s.urgency * 100),
       status: "signal",
       use_case: "real_estate",
       evidence: [{ url: s.evidence_url, title: s.headline, platform: "permits", author: s.account.name, engagement: 0 }],
-      script,
+      script: writing,
     })
     .select("id")
     .single();
   if (error) throw error;
+  await enqueue(db, ws.id, "write_script", { kind: "signal", ideaId: idea.id, signalId });
   redirect(`/ideas/${idea.id}`);
+}
+
+// Try writing a script again after it failed. The failed script remembers what to queue.
+export async function retryScript(formData: FormData) {
+  const { db, ws } = await currentWorkspace();
+  const ideaId = String(formData.get("idea"));
+  const { data: idea } = await db.from("vl_ideas").select("script").eq("id", ideaId).eq("workspace_id", ws.id).maybeSingle();
+  const retry = (idea?.script as Script | null)?.retry;
+  if (!retry) return;
+  const writing: Script = { method: "", beats: [], totalSeconds: 0, state: "writing", retry };
+  await db.from("vl_ideas").update({ script: writing }).eq("id", ideaId);
+  if (retry.noteId) await db.from("vl_video_notes").update({ script: writing }).eq("id", retry.noteId);
+  await enqueue(db, ws.id, "write_script", { kind: retry.kind, ideaId, noteId: retry.noteId, signalId: retry.signalId });
+  revalidatePath(`/ideas/${ideaId}`);
+  if (retry.noteId) revalidatePath(`/signals/note/${retry.noteId}`);
 }

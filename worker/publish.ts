@@ -11,7 +11,14 @@ export async function publishVideo(db: SupabaseClient, publishId: string) {
   const { data: video } = await db.from("vl_videos").select("title,output_path").eq("id", job.video_id).single();
   if (!video?.output_path) throw new Error("video has no rendered file yet");
   const videoUrl = db.storage.from("vl-videos").getPublicUrl(video.output_path).data.publicUrl;
-  const caption = (job.captions as { all?: string }).all || video.title;
+  const captions = job.captions as { all?: string; by?: Record<string, string> };
+  const caption = captions.all || video.title;
+  // a caption written for one platform goes out only to the platforms that share it
+  const groups = new Map<string, string[]>();
+  for (const pl of job.platforms as string[]) {
+    const text = captions.by?.[pl]?.trim() || caption;
+    groups.set(text, [...(groups.get(text) ?? []), pl]);
+  }
 
   await db.from("vl_publish_jobs").update({ status: "publishing" }).eq("id", publishId);
 
@@ -26,15 +33,18 @@ export async function publishVideo(db: SupabaseClient, publishId: string) {
     return { simulated: true, platforms: job.platforms };
   }
 
-  const requestId = await publish({
-    user: profileName(job.workspace_id), videoUrl, title: caption, platforms: job.platforms, scheduledAt: job.scheduled_at,
-  });
-  await db.from("vl_publish_jobs").update({ request_id: requestId }).eq("id", publishId);
+  const requests: string[] = [];
+  for (const [text, platforms] of groups) {
+    requests.push(await publish({ user: profileName(job.workspace_id), videoUrl, title: text, platforms, scheduledAt: job.scheduled_at }));
+  }
+  const requestId = requests[0];
+  await db.from("vl_publish_jobs").update({ request_id: requests.join(",") }).eq("id", publishId);
 
   // poll for up to three minutes; scheduled posts finish later and are reported as scheduled
   for (let i = 0; i < 36; i++) {
     await sleep(5000);
-    const s = await status(requestId);
+    const all = await Promise.all(requests.map((r) => status(r)));
+    const s = { status: all.every((x) => /complete|success|done|scheduled|failed/i.test(x.status)) ? all[0].status : "processing", results: Object.assign({}, ...all.map((x) => x.results)) as typeof all[0]["results"] };
     await db.from("vl_publish_jobs").update({ results: s.results }).eq("id", publishId);
     if (/complete|success|done|scheduled|failed/i.test(s.status)) {
       const failed = Object.values(s.results).some((r) => r.success === false);

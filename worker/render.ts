@@ -1,13 +1,10 @@
 import { spawn } from "node:child_process";
-import { mkdir, readFile, writeFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readFile } from "node:fs/promises";
+import { availableParallelism } from "node:os";
 import path from "node:path";
-import type { SupabaseClient } from "@supabase/supabase-js";
-import { composeHtml, type Brand, type Theme } from "./compose";
-import { isUseCase } from "../src/lib/usecases";
-import { planScenes, wordsFromText, type Word } from "./plan";
+import { wordsFromText, type Word } from "./plan";
 
-function run(cmd: string, args: string[], cwd?: string): Promise<string> {
+export function run(cmd: string, args: string[], cwd?: string): Promise<string> {
   return new Promise((resolve, reject) => {
     // .cmd shims need a shell on Windows, and the project path contains spaces, so quote it
     const shell = process.platform === "win32" && cmd.endsWith(".cmd");
@@ -20,18 +17,19 @@ function run(cmd: string, args: string[], cwd?: string): Promise<string> {
   });
 }
 
-async function duration(file: string): Promise<number> {
+export async function duration(file: string): Promise<number> {
   const out = await run("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", file]);
   return Number(out.trim()) || 0;
 }
 
 // MediaRecorder output has no duration header and a variable frame rate, so every take is
-// re-encoded to a constant 30 fps H.264 file cropped to the speaker frame.
-async function normalise(input: string, output: string) {
+// re-encoded to a constant 30 fps H.264 portrait file. The edit moves the speaker between a framed window, a
+// small circle and full bleed, so the whole 9:16 picture is kept and each layout crops it with object-fit.
+export async function normalise(input: string, output: string) {
   await run("ffmpeg", [
     "-y", "-loglevel", "error", "-i", input,
-    "-vf", "fps=30,scale=1000:1100:force_original_aspect_ratio=increase,crop=1000:1100",
-    "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p", "-g", "30",
+    "-vf", "fps=30,scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280",
+    "-c:v", "libx264", "-preset", "veryfast", "-crf", "22", "-pix_fmt", "yuv420p", "-g", "30",
     "-c:a", "aac", "-ar", "44100", "-ac", "1", output,
   ]);
 }
@@ -70,76 +68,17 @@ const hyperframes = () => ({
   pre: [] as string[],
 });
 
+// Headless Chrome workers per render. Several renders can share a container, so the cores are divided between them,
+// and the count is capped because a container often reports the whole host’s cores, not its own share.
+export function renderWorkers(env: Record<string, string | undefined> = process.env, cores = availableParallelism()): number {
+  const explicit = Number(env.RENDER_WORKERS);
+  if (explicit >= 1) return Math.floor(explicit);
+  const sharing = Math.max(1, Math.floor(Number(env.RENDER_CONCURRENCY) || 1));
+  return Math.min(4, Math.max(1, Math.floor(cores / sharing)));
+}
+
 export async function renderComposition(dir: string, out: string) {
   const { cmd, pre } = hyperframes();
   // CRF 24 is plenty for a phone screen and keeps the file near 8 MB, which matters for upload time
-  await run(cmd, [...pre, "render", "--fps", process.env.RENDER_FPS ?? "24", "--crf", process.env.RENDER_CRF ?? "24", "--quiet", "-o", out], dir);
-}
-
-export async function renderVideo(db: SupabaseClient, videoId: string) {
-  const t0 = Date.now();
-  const timings: Record<string, number> = {};
-  let mark = t0;
-  const lap = (name: string) => { timings[name] = Date.now() - mark; mark = Date.now(); };
-  const { data: video } = await db.from("vl_videos").select("*").eq("id", videoId).single();
-  if (!video) throw new Error("video not found");
-  await db.from("vl_videos").update({ status: "processing", error: null }).eq("id", videoId);
-
-  const [{ data: rec }, { data: ws }, { data: idea }] = await Promise.all([
-    db.from("vl_recordings").select("*").eq("id", video.recording_id).single(),
-    db.from("vl_workspaces").select("name,brand").eq("id", video.workspace_id).single(),
-    video.idea_id ? db.from("vl_ideas").select("script").eq("id", video.idea_id).single() : Promise.resolve({ data: null }),
-  ]);
-  if (!rec || !ws) throw new Error("recording or workspace missing");
-
-  const dir = path.join(tmpdir(), `verbalore-${videoId}`);
-  await mkdir(path.join(dir, "assets"), { recursive: true });
-  try {
-    const raw = path.join(dir, "raw" + path.extname(rec.path));
-    const dl = await db.storage.from("vl-recordings").download(rec.path);
-    if (dl.error || !dl.data) throw new Error(`download failed: ${dl.error?.message}`);
-    await writeFile(raw, Buffer.from(await dl.data.arrayBuffer()));
-    lap("download");
-
-    const talk = path.join(dir, "assets", "talk.mp4");
-    await normalise(raw, talk);
-    const secs = Math.min(await duration(talk), 90);
-    lap("normalise");
-
-    const scriptText = (idea?.script?.beats ?? []).map((b: { text: string }) => b.text).join(" ");
-    const { words, via } = await transcribe(talk, scriptText || "Your video", secs);
-    lap("transcribe");
-    const { scenes, via: planVia } = await planScenes(words, secs, isUseCase(video.use_case) ? video.use_case : "general");
-
-    const html = composeHtml({
-      scenes, words, duration: secs, brand: ws.brand as Brand, theme: video.template as Theme,
-      videoFile: "assets/talk.mp4", brandName: ws.name,
-    });
-    await writeFile(path.join(dir, "index.html"), html);
-
-    lap("plan");
-    const out = path.join(dir, "out.mp4");
-    await renderComposition(dir, out);
-    lap("render");
-
-    const objectPath = `${video.workspace_id}/${videoId}.mp4`;
-    const up = await db.storage.from("vl-videos").upload(objectPath, await readFile(out), { contentType: "video/mp4", upsert: true });
-    if (up.error) throw new Error(`upload failed: ${up.error.message}`);
-    lap("upload");
-
-    const renderMs = Date.now() - t0;
-    await db.from("vl_videos").update({
-      status: "ready", output_path: objectPath, duration_s: secs, render_ms: renderMs,
-      scene_plan: scenes, transcript: { via, planVia, words: words.length, timings },
-    }).eq("id", videoId);
-    if (video.idea_id) {
-      await db.from("vl_video_notes").update({ video_id: videoId, status: "ready" }).eq("idea_id", video.idea_id).is("video_id", null);
-    }
-    return { renderMs, scenes: scenes.length, via, planVia, timings };
-  } catch (err) {
-    await db.from("vl_videos").update({ status: "failed", error: (err as Error).message.slice(0, 500) }).eq("id", videoId);
-    throw err;
-  } finally {
-    await rm(dir, { recursive: true, force: true }).catch(() => {});
-  }
+  await run(cmd, [...pre, "render", "--fps", process.env.RENDER_FPS ?? "24", "--crf", process.env.RENDER_CRF ?? "24", "--workers", String(renderWorkers()), "--quiet", "-o", out], dir);
 }

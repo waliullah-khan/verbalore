@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-export type JobKind = "generate_ideas" | "render_video" | "scan_signals" | "publish_video" | "render_note" | "send_digest";
+export type JobKind = "generate_ideas" | "render_video" | "scan_signals" | "publish_video" | "render_note" | "send_digest" | "onboard_workspace" | "write_script" | "render_final";
 
 export async function enqueue(db: SupabaseClient, workspaceId: string, kind: JobKind, payload: Record<string, unknown> = {}) {
   const { data, error } = await db.from("vl_jobs").insert({ workspace_id: workspaceId, kind, payload }).select("id").single();

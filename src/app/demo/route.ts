@@ -9,5 +9,5 @@ export async function GET(req: Request) {
     password: process.env.DEMO_USER_PASSWORD!,
   });
   const base = new URL(req.url).origin;
-  return NextResponse.redirect(`${base}${error ? "/login?error=demo" : "/ideas"}`);
+  return NextResponse.redirect(`${base}${error ? "/login?error=demo" : "/home"}`);
 }

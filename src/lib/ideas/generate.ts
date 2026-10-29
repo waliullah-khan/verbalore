@@ -8,7 +8,9 @@ import { buildVoiceProfile, measureVoice, type VoiceProfile } from "../brain/voi
 import { docsForUseCase } from "../brain/scope";
 import { austinPosts, loadAustin } from "../signals/sources/austin";
 import { playbook, profileFor, type Playbook, type UseCaseId } from "../usecases";
-import { buildScript, type Evidence, type Idea, type Reference } from "./types";
+import type { Evidence, Idea, Reference } from "./types";
+import { fallbackScript, writeScript } from "../scripts/writer";
+import type { WriterInput } from "../scripts/types";
 
 type Workspace = { id: string; name: string; niche: string; offer: string; icp: string; is_demo?: boolean };
 type Profile = { niche: string; offer: string; icp: string; topic: string };
@@ -50,11 +52,7 @@ function fallbackIdeas(ws: Profile, pb: Playbook, top: Post[], proof: string, co
   return top.slice(0, count).map((p, i) => {
     const short = p.title.replace(/\s+/g, " ").slice(0, 90);
     const hook = `Everyone is talking about this: ${short}. Here is what they are missing.`;
-    const body = [
-      `People are reacting to it on ${p.platform} right now, and most of the advice is the same recycled tip.`,
-      ws.offer,
-      proof,
-    ].filter(Boolean);
+    const format = pb.formats[i % pb.formats.length];
     return {
       angle: `React to the ${p.platform} conversation about "${short}"`,
       hook,
@@ -62,34 +60,40 @@ function fallbackIdeas(ws: Profile, pb: Playbook, top: Post[], proof: string, co
       score: Math.round((p.score ?? 0.5) * 100),
       evidence: [toEvidence(p)],
       reference: null,
-      script: buildScript(pb.formats[i % pb.formats.length].name, hook, body, "Follow for one play like this every day."),
+      script: fallbackScript({
+        kind: "idea", structure: format.name, structureGuide: format.pattern, hook, angle: short,
+        evidence: [`${p.title}. ${p.text}`], brain: [ws.offer, proof].filter(Boolean).join(" "),
+      }),
     };
   });
 }
 
-type Draft = {
-  angle: string; hook: string; why_now: string; evidence_ids: string[]; method: string; body: string[]; cta: string;
-};
+// What a script is told about the voice and the ground rules, shared by every idea written in one run.
+const IDEA_RULES = [
+  'Posts from platform "permits" are official city records. When you use one of their numbers, quote it exactly and say it comes from city permit records.',
+  "Do not describe neighborhoods, commute times, schools or amenities, and do not place an address in a named area, unless a post says so.",
+];
 
-async function writeWithModel(ws: Workspace, profile: Profile, pb: Playbook, voice: VoiceProfile, brain: string, posts: Post[], count: number): Promise<Draft[]> {
+type Pitch = { angle: string; hook: string; why_now: string; evidence_ids: string[]; method: string };
+
+// Step one: choose what to make videos about. The scripts themselves are written afterwards by the shared writer.
+async function pitchIdeas(ws: Workspace, profile: Profile, pb: Playbook, voice: VoiceProfile, brain: string, posts: Post[], count: number): Promise<Pitch[]> {
   const system = [
-    `You write short-form video ideas and scripts for ${ws.name}.`,
+    `You choose video ideas for ${ws.name}. You do not write the scripts yet; you pick the angle, the opening line and the format.`,
     `What they sell: ${profile.offer}. Their audience: ${profile.icp}.`,
-    `Content type: ${pb.label}. Use these script formats, one per idea where they fit:\n${pb.formats.map((f) => `- ${f.name}: ${f.pattern}`).join("\n")}`,
+    `Content type: ${pb.label}. Script formats, use a different one per idea where they fit:\n${pb.formats.map((f) => `- ${f.name}: ${f.pattern}`).join("\n")}`,
     `Hook patterns that work for this audience: ${pb.hooks.join(" | ")}`,
     `Their voice: ${voice.tone}. Sentences average ${voice.avgSentenceWords} words. Rules: ${voice.rules.join("; ")}.`,
     "Use only facts from the brain notes and the posts. Do not invent statistics or customers.",
-    'Posts from platform "permits" are official city records. When you use one of their numbers, quote it exactly and say it comes from city permit records.',
-    "Do not describe neighborhoods, commute times, schools or amenities, and do not place an address in a named area, unless a post says so. Say only what the sources say.",
-    'Posts describe other people. Never turn a story from a post into the speaker\'s own experience ("I", "we", "a client of mine") unless the brain notes say it happened to the speaker. Say "one buyer" or "a team" instead.',
-    "Each script runs 50 to 70 seconds spoken, about 130 to 170 words: a hook (one or two sentences, result first), five to seven body beats of two short sentences each that build a real argument with a specific detail, example or number from the sources, and a CTA of one or two sentences. Never write fewer than 120 words. Plain words, no hype, no emojis.",
-    `Return JSON: {"ideas":[{"angle","hook","why_now","evidence_ids":[post ids],"method":"the script format name you used","body":[strings],"cta"}]}. Write exactly ${count} ideas, each built on different posts.`,
+    ...IDEA_RULES,
+    "The hook is result first and 18 words or fewer. why_now says in one sentence what in the posts makes this timely.",
+    `Return JSON: {"ideas":[{"angle","hook","why_now","evidence_ids":[post ids, one to three],"method":"the format name you chose"}]}. Write exactly ${count} ideas, each built on different posts.`,
   ].join("\n");
   const user = `BRAIN NOTES:\n${brain}\n\nPOSTS (id | platform | engagement | title | text):\n${posts
     .map((p) => `${p.id} | ${p.platform} | ${Math.round(p.engagement)} | ${p.title} | ${p.text.slice(0, 240)}`)
     .join("\n")}`;
-  const out = await completeJson<{ ideas: Draft[] }>([{ role: "system", content: system }, { role: "user", content: user }]);
-  return out.ideas ?? [];
+  const out = await completeJson<{ ideas: Pitch[] }>([{ role: "system", content: system }, { role: "user", content: user }]);
+  return (out.ideas ?? []).filter((x) => x && x.hook && x.angle);
 }
 
 export async function generateIdeas(db: SupabaseClient, ws: Workspace, count = 5, useCase: UseCaseId = "general") {
@@ -144,25 +148,32 @@ export async function generateIdeas(db: SupabaseClient, ws: Workspace, count = 5
   let ideas: Idea[] = [];
   if (process.env.OPENROUTER_API_KEY) {
     try {
-      const drafts = await writeWithModel(ws, profile, pb, voice, brain, top, count);
-      lap("writer");
+      const pitches = await pitchIdeas(ws, profile, pb, voice, brain, top, count);
+      lap("pitch");
       const byId = new Map(top.map((p) => [p.id, p]));
+      const voiceLine = `${voice.tone}. Sentences average ${voice.avgSentenceWords} words. ${voice.rules.join("; ")}.`;
       ideas = await Promise.all(
-        drafts.slice(0, count).map(async (d) => {
-          const ev = d.evidence_ids.map((id) => byId.get(id)).filter((p): p is Post => !!p);
-          const evidence = (ev.length ? ev : top.slice(0, 2)).map(toEvidence);
-          const reference = await chooseReference(d.angle, ev.length ? ev : top.slice(0, 2), top);
+        pitches.slice(0, count).map(async (pitch) => {
+          const ev = pitch.evidence_ids.map((id) => byId.get(id)).filter((p): p is Post => !!p);
+          const used = ev.length ? ev : top.slice(0, 2);
+          const format = pb.formats.find((f) => f.name.toLowerCase() === String(pitch.method).toLowerCase()) ?? pb.formats[0];
+          const input: WriterInput = {
+            kind: "idea", structure: format.name, structureGuide: format.pattern, hook: pitch.hook, angle: pitch.angle,
+            evidence: used.map((p) => `${p.title}. ${p.text}`), brain, voice: voiceLine, audience: profile.icp, offer: profile.offer, rules: IDEA_RULES,
+          };
+          const [written, reference] = await Promise.all([writeScript(input), chooseReference(pitch.angle, used, top)]);
           return {
-            angle: d.angle,
-            hook: d.hook,
-            why_now: d.why_now,
+            angle: pitch.angle,
+            hook: written.script.beats[0].text,
+            why_now: pitch.why_now,
             score: Math.round(((ev.reduce((a, p) => a + (p.score ?? 0), 0) / Math.max(1, ev.length)) || 0.5) * 100),
-            evidence,
+            evidence: used.map(toEvidence),
             reference,
-            script: buildScript(d.method || "Direct", d.hook, d.body, d.cta),
+            script: written.script,
           };
         })
       );
+      lap("writer");
     } catch (err) {
       notes.push(`writer failed, used templates: ${(err as Error).message}`);
     }

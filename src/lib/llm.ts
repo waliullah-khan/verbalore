@@ -26,8 +26,8 @@ async function call(model: string, messages: Msg[], json: boolean, timeoutMs: nu
 // The writer model can pass three minutes on long prompts, so it gets a generous window
 // and a fast model catches a timeout or provider error.
 export async function complete(messages: Msg[], opts: { json?: boolean; fast?: boolean } = {}): Promise<string> {
-  const writer = process.env.WRITER_MODEL ?? "deepseek/deepseek-v4-pro";
-  const fast = process.env.FAST_MODEL ?? "deepseek/deepseek-v4-flash";
+  const writer = process.env.WRITER_MODEL ?? "anthropic/claude-haiku-5.5";
+  const fast = process.env.FAST_MODEL ?? "anthropic/claude-haiku-5.5";
   const first = opts.fast ? fast : writer;
   try {
     return await call(first, messages, !!opts.json, opts.fast ? 45_000 : 150_000);

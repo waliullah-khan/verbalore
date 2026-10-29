@@ -13,7 +13,7 @@ export default function CopyLink({ value }: { value: string }) {
   }
   return (
     <div className="flex gap-2">
-      <input readOnly value={value} aria-label="Personal sign-in link" className="field mono text-[0.8rem]" onFocus={(e) => e.currentTarget.select()} />
+      <input readOnly value={value} aria-label="Personal sign-in link" className="lf mono text-[0.8rem]" onFocus={(e) => e.currentTarget.select()} />
       <button type="button" className="btn btn-ghost shrink-0" onClick={copy}>{done ? "Copied" : "Copy"}</button>
     </div>
   );

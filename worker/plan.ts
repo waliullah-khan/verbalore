@@ -1,11 +1,13 @@
 import { z } from "zod";
 import { completeJson } from "../src/lib/llm";
-import { playbook, type SceneType, type UseCaseId } from "../src/lib/usecases";
+import { playbook, type SceneType, type ThemeId, type UseCaseId } from "../src/lib/usecases";
+import { clean, hash, keywordOf } from "./skins/kit";
+import styleData from "../fixtures/video-styles.json";
 
 export type Word = { word: string; start: number; end: number };
 export type { SceneType };
 
-export const SCENE_TYPES = ["hook", "stat", "list", "quote", "tip", "cta", "code", "compare", "facts"] as const;
+export const SCENE_TYPES = ["hook", "stat", "list", "quote", "tip", "cta", "code", "compare", "facts", "keyword", "stack"] as const;
 
 export type Scene = {
   type: SceneType;
@@ -19,13 +21,18 @@ export type Scene = {
   code?: string[];
   compare?: { leftLabel: string; left: string; rightLabel: string; right: string };
   facts?: { value: string; label: string }[];
+  // the word worth emphasising on screen
+  keyword?: string;
 };
 
-const MIN_SCENE = 3.5;
-const MAX_SCENE = 8.5;
+// A showreel changes every couple of seconds, so beats are short: cut at the end of a sentence, at a clause
+// or a breath, and never let one run past a few seconds.
+const MIN_SCENE = 1.8;
+const CLAUSE_SCENE = 2.6;
+const MAX_SCENE = 3.6;
 const sentenceEnd = /[.!?]$/;
 
-// Group words into scenes at sentence ends, aiming for 4 to 8 seconds each.
+// Group words into beats of roughly two to three and a half seconds.
 export function segment(words: Word[], duration: number): { start: number; end: number; text: string }[] {
   if (!words.length) return [];
   const out: { start: number; end: number; text: string }[] = [];
@@ -35,13 +42,15 @@ export function segment(words: Word[], duration: number): { start: number; end: 
     out.push({ start: cur[0].start, end: cur[cur.length - 1].end, text: cur.map((w) => w.word).join(" ") });
     cur = [];
   };
-  for (const w of words) {
+  words.forEach((w, idx) => {
     cur.push(w);
     const len = w.end - cur[0].start;
-    if ((sentenceEnd.test(w.word) && len >= MIN_SCENE) || len >= MAX_SCENE) flush();
-  }
+    const gap = words[idx + 1] ? words[idx + 1].start - w.end : 9;
+    const clause = /[,;:]$/.test(w.word) || gap >= 0.35;
+    if ((sentenceEnd.test(w.word) && len >= MIN_SCENE) || (clause && len >= CLAUSE_SCENE) || len >= MAX_SCENE) flush();
+  });
   flush();
-  if (out.length > 1 && out[out.length - 1].end - out[out.length - 1].start < 2.5) {
+  if (out.length > 1 && out[out.length - 1].end - out[out.length - 1].start < 1.2) {
     const tail = out.pop()!;
     const prev = out[out.length - 1];
     prev.end = tail.end;
@@ -113,6 +122,24 @@ export function extractFacts(text: string): { value: string; label: string }[] {
   return found.sort((x, y) => x.at - y.at).slice(0, 4).map(({ value, label }) => ({ value, label }));
 }
 
+const FILLER = /^(and|but|so|then|well|um|uh|like|just|now|because|also|or|that|which|the|a|an|to|of|in|on|at|its|im|i|it)$/i;
+
+// A few words around the emphasis word: what goes on screen, instead of the whole sentence.
+export function keyPhrase(text: string, keyword: string, max = 5): string {
+  const toks = text.replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
+  const tidy = (s: string) => s.replace(/[,;:]+$/, "").replace(/\.$/, "");
+  if (toks.length <= max) return tidy(toks.join(" "));
+  let idx = toks.findIndex((t) => clean(t) === clean(keyword));
+  if (idx < 0) idx = 0;
+  let a = Math.max(0, idx - Math.floor((max - 1) / 2));
+  const b = Math.min(toks.length, a + max);
+  a = Math.max(0, b - max);
+  while (a < b - 1 && FILLER.test(toks[a].replace(/[^\w]/g, ""))) a++;
+  return tidy(toks.slice(a, b).join(" "));
+}
+
+const TEXT_BEATS: SceneType[] = ["keyword", "tip", "stack", "quote"];
+
 // Deterministic classification used when no model is available or its answer fails validation.
 export function heuristicScene(
   raw: { start: number; end: number; text: string },
@@ -121,9 +148,10 @@ export function heuristicScene(
   prefer: SceneType[] = ["stat", "list", "quote", "tip"]
 ): Scene {
   const { text } = raw;
-  const base = { start: raw.start, end: raw.end, text };
-  if (index === 0) return { ...base, type: "hook", headline: trim(firstSentence(text), 70) };
-  if (index === total - 1 && total > 1) return { ...base, type: "cta", headline: trim(firstSentence(text), 60), sub: "Follow for more" };
+  const base = { start: raw.start, end: raw.end, text, keyword: keywordOf(text) };
+  const kw = base.keyword;
+  if (index === 0) return { ...base, type: "hook", headline: keyPhrase(firstSentence(text), kw, 8) };
+  if (index === total - 1 && total > 1) return { ...base, type: "cta", headline: keyPhrase(firstSentence(text), kw, 6), sub: "Follow for more" };
 
   const head = trim(firstSentence(text).replace(/`/g, ""), 70);
   if (prefer.includes("code")) {
@@ -144,7 +172,13 @@ export function heuristicScene(
   if (parts.length >= 3 || /\b(first|second|third|step)\b/i.test(text)) {
     return { ...base, type: "list", headline: trim(firstSentence(text), 50), items: parts.slice(0, 3).map((p) => trim(p, 40)) };
   }
-  return { ...base, type: index % 2 ? "quote" : "tip", headline: head };
+  // plain speech: rotate the treatments so no two beats in a row look the same
+  const phrase = keyPhrase(text, kw, 5);
+  let type = TEXT_BEATS[index % TEXT_BEATS.length];
+  if (type === "keyword" && kw.length < 4) type = "tip";
+  if (type === "stack" && phrase.split(" ").length < 3) type = "quote";
+  if (/\?\s*$/.test(firstSentence(text))) type = "quote";
+  return { ...base, type, headline: type === "quote" ? trim(firstSentence(text), 70) : phrase };
 }
 
 const modelScene = z.object({
@@ -152,6 +186,7 @@ const modelScene = z.object({
   headline: z.string().min(2).max(90),
   sub: z.string().max(80).optional(),
   stat: z.string().max(12).optional(),
+  keyword: z.string().max(24).optional(),
   items: z.array(z.string().max(44)).min(2).max(4).optional(),
   code: z.array(z.string().max(48)).min(1).max(6).optional(),
   compare: z.object({ leftLabel: z.string().max(14), left: z.string().max(60), rightLabel: z.string().max(14), right: z.string().max(60) }).optional(),
@@ -170,14 +205,50 @@ export function validScene(s: Scene): boolean {
   }
 }
 
-export async function planScenes(words: Word[], duration: number, useCase: UseCaseId = "general"): Promise<{ scenes: Scene[]; via: "model" | "heuristic" }> {
+type StyleData = { styles: { id: string; name: string; recipe: string }[]; cases: { style: string; title: string; likes: number }[] };
+const STYLES = styleData as unknown as StyleData;
+
+// The recipe for a family and the three most-liked real examples made in it, handed to the planner as a brief.
+export function styleBrief(family: string): string {
+  const s = STYLES.styles.find((x) => x.id === family);
+  if (!s) return "";
+  const top = STYLES.cases.filter((c) => c.style === family).sort((a, b) => b.likes - a.likes).slice(0, 3).map((c) => c.title);
+  return `Visual style: ${s.name}. ${s.recipe} Reference films in this style: ${top.join("; ")}.`;
+}
+
+// Which family suits what was said. Content cues first, then the use case, then a stable pick so a channel does not
+// look the same in every video. (A model decision via Jev could replace this; the heuristic is free and instant.)
+const BY_USE_CASE: Record<UseCaseId, ThemeId[]> = {
+  real_estate: ["photoreal", "cinematic3d", "lowpoly"],
+  developers: ["retro", "pixel", "productui"],
+  product_marketing: ["productui", "cartoon", "typography"],
+  gtm: ["productui", "typography", "explainer"],
+  c_suite: ["explainer", "photoreal", "cinematic3d"],
+  founders: ["typography", "collage", "generative"],
+  general: ["typography", "generative", "handdrawn", "collage"],
+};
+
+export function chooseSkin(scenes: Scene[], useCase: UseCaseId, seed: string): ThemeId {
+  const n = Math.max(1, scenes.length);
+  const count = (t: SceneType) => scenes.filter((s) => s.type === t).length;
+  if (count("code") >= 1) return "retro";
+  if ((count("stat") + count("facts")) / n >= 0.3) return "explainer";
+  if (count("compare") >= 1 && useCase === "product_marketing") return "cartoon";
+  const pool = BY_USE_CASE[useCase] ?? BY_USE_CASE.general;
+  return pool[hash(seed) % pool.length];
+}
+
+const withTimeout = <T,>(p: Promise<T>, ms: number) => Promise.race([p, new Promise<never>((_, rej) => setTimeout(() => rej(new Error("planner timed out")), ms))]);
+
+export async function planScenes(words: Word[], duration: number, useCase: UseCaseId = "general", opts: { family?: string } = {}): Promise<{ scenes: Scene[]; via: "model" | "heuristic" }> {
   const segs = segment(words, duration);
   const prefer = playbook(useCase).scenes;
   const fallback = () => segs.map((s, i) => heuristicScene(s, i, segs.length, prefer));
 
   if (!process.env.OPENROUTER_API_KEY || segs.length < 2) return { scenes: fallback(), via: "heuristic" };
   try {
-    const out = await completeJson<{ scenes: unknown[] }>(
+    const brief = opts.family ? styleBrief(opts.family) : "";
+    const out = await withTimeout(completeJson<{ scenes: unknown[] }>(
       [
         {
           role: "system",
@@ -190,12 +261,12 @@ export async function planScenes(words: Word[], duration: number, useCase: UseCa
             'compare (two states are contrasted; compare is {"leftLabel","left","rightLabel","right"}), ' +
             'facts (2 to 4 numbers with labels; facts is [{"value","label"}], e.g. 3 beds). ' +
             `This video is for: ${playbook(useCase).label}. Prefer these graphics when the words support them: ${prefer.join(", ")}. ` +
-            'Headlines are under 9 words. Use only words and numbers from the segment. Reply {"scenes":[...]} with one entry per segment, in order.',
+            'keyword (one giant word with a line of context) and stack (three stacked words) suit plain speech. Headlines are under 7 words. Add "keyword": the one word in the segment worth emphasising. Use only words and numbers from the segment. ' + (brief ? brief + ' ' : '') + 'Reply {"scenes":[...]} with one entry per segment, in order.',
         },
         { role: "user", content: segs.map((s, i) => `${i + 1}. ${s.text}`).join("\n") },
       ],
       { fast: true }
-    );
+    ), 15_000);
     const scenes = segs.map((seg, i) => {
       const parsed = modelScene.safeParse(out.scenes?.[i]);
       const h = heuristicScene(seg, i, segs.length, prefer);

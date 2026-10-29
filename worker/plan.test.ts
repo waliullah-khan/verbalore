@@ -78,3 +78,92 @@ test("an opening that is not a hook and an ending that is not a cta are correcte
   assert.equal(scenes[0].type, "hook");
   assert.equal(scenes[scenes.length - 1].type, "cta");
 });
+
+import { chooseSkin, keyPhrase, styleBrief } from "./plan";
+import { isFamily, skinFor } from "./skins";
+import { composeHtml } from "./compose";
+
+test("beats are short so the picture keeps changing", () => {
+  // a steady speaker: about 2.5 words a second, a breath after each clause
+  const toks = "So today we are here to talk about advertising, and honestly a lot of it comes down to confusing advice, not a lack of trying, because the truth is simpler than that, and you can start this week.".split(" ");
+  const w = toks.map((word, i) => ({ word, start: Number((i * 0.4).toFixed(2)), end: Number((i * 0.4 + 0.34).toFixed(2)) }));
+  const dur = w[w.length - 1].end;
+  const segs = segment(w, dur);
+  assert.ok(segs.length >= 4, `expected several beats, got ${segs.length}`);
+  for (const s of segs.slice(0, -1)) assert.ok(s.end - s.start <= 4.2, `a beat ran ${(s.end - s.start).toFixed(1)}s`);
+});
+
+test("a key phrase is a few words around the emphasis word, not the sentence", () => {
+  const p = keyPhrase("And honestly a lot of it comes down to confusing advice, not a lack of trying.", "confusing", 5);
+  assert.ok(p.split(" ").length <= 5);
+  assert.ok(p.toLowerCase().includes("confusing"));
+  assert.equal(keyPhrase("Short line here.", "line", 5), "Short line here");
+});
+
+test("plain speech rotates its treatments instead of repeating one", () => {
+  const texts = ["We realized something was off here.", "Nobody takes notes during meetings anymore.", "Discussions got more honest and spacious.", "The shift changed everything for our team."];
+  const types = texts.map((t, i) => heuristicScene({ start: i * 2, end: i * 2 + 2, text: t }, i + 1, 8).type);
+  assert.ok(new Set(types).size >= 3, types.join(","));
+});
+
+test("every family and the older theme names resolve to a skin, and the brief names real reference films", () => {
+  for (const id of ["typography", "productui", "explainer", "generative", "handdrawn", "cartoon", "pixel", "retro", "collage", "lowpoly", "cinematic3d", "photoreal", "kinetic", "product", "terminal", "boardroom", "listing", "editorial"]) {
+    assert.ok(isFamily(id), id);
+    assert.ok(skinFor(id).id);
+  }
+  assert.match(styleBrief("typography"), /kinetic typography/i);
+  assert.match(styleBrief("typography"), /Reference films/);
+});
+
+test("the skin choice follows the content and is stable for one video", () => {
+  const code = [{ type: "code", start: 0, end: 3, text: "x", headline: "h", code: ["npm i a"] }] as Parameters<typeof chooseSkin>[0];
+  assert.equal(chooseSkin(code, "general", "a"), "retro");
+  const plain = [{ type: "tip", start: 0, end: 3, text: "x", headline: "h" }] as Parameters<typeof chooseSkin>[0];
+  assert.equal(chooseSkin(plain, "founders", "same-seed"), chooseSkin(plain, "founders", "same-seed"));
+});
+
+test("every skin composes a page with a speaker, scenes, captions and a registered timeline", () => {
+  const text = "We booked 11 meetings from 60 notes. First spot the signal, then record thirty seconds, then send it today. Follow for the daily play.";
+  const words = wordsFromText(text, 24);
+  const segs = segment(words, 24);
+  const scenes = segs.map((s, i) => heuristicScene(s, i, segs.length));
+  for (const theme of ["typography", "productui", "explainer", "generative", "handdrawn", "cartoon", "pixel", "retro", "collage", "lowpoly", "cinematic3d", "photoreal"] as const) {
+    const html = composeHtml({ scenes, words, duration: 24, brand: { accent: "#c2410c", paper: "#f6f1e7", ink: "#14110f" }, theme, videoFile: "assets/talk.mp4", brandName: "Test" });
+    assert.match(html, /id="talk"/, theme);
+    assert.match(html, /window\.__timelines\["main"\] = tl/, theme);
+    assert.ok((html.match(/class="scene clip/g) ?? []).length === scenes.length, theme);
+    assert.ok(!/repeat: -1/.test(html), `${theme} has an endless repeat`);
+    assert.ok(!/Math\.random|Date\.now/.test(html), `${theme} uses a render-time clock`);
+  }
+});
+
+import { printableBrand } from "./skins/engine";
+
+test("an auto-named workspace is never printed into a video, a real brand name is", () => {
+  for (const auto of ["Ada's workspace", "Admin's workspace", "Wali's Workspace", "", "   "]) assert.equal(printableBrand(auto), "", JSON.stringify(auto));
+  assert.equal(printableBrand("Clearpath"), "Clearpath");
+  const words = wordsFromText("We booked 11 meetings from 60 notes. Follow for the daily play.", 20);
+  const segs = segment(words, 20);
+  const scenes = segs.map((s, i) => heuristicScene(s, i, segs.length));
+  const brand = { accent: "#c2410c", paper: "#f6f1e7", ink: "#14110f" };
+  for (const theme of ["typography", "productui", "retro"] as const) {
+    const html = composeHtml({ scenes, words, duration: 20, brand, theme, videoFile: "assets/talk.mp4", brandName: "Ada's workspace" });
+    assert.ok(!/Ada/.test(html), `${theme} printed the workspace name`);
+    assert.ok(!/class="l3"/.test(html), `${theme} still has the lower third`);
+  }
+  assert.match(composeHtml({ scenes, words, duration: 20, brand, theme: "productui", videoFile: "assets/talk.mp4", brandName: "Clearpath" }), /class="l3"/);
+});
+
+test("with a matte every skin composes the cutout layout, and the speaker sits above the graphics but under the captions", () => {
+  const words = wordsFromText("We booked 11 meetings from 60 notes. First spot the signal, then record thirty seconds, then send it today.", 20);
+  const segs = segment(words, 20);
+  const scenes = segs.map((s, i) => heuristicScene(s, i, segs.length));
+  for (const theme of ["typography", "productui", "explainer", "generative", "handdrawn", "cartoon", "pixel", "retro", "collage", "lowpoly", "cinematic3d", "photoreal"] as const) {
+    const html = composeHtml({ scenes, words, duration: 20, brand: { accent: "#c2410c", paper: "#f6f1e7", ink: "#14110f" }, theme, videoFile: "assets/talk.mp4", brandName: "Test", matteFile: "assets/matte.webm" });
+    assert.match(html, /id="cut" src="assets\/matte\.webm"/, theme);
+    assert.match(html, /#cut \{[^}]*z-index: 4/, theme);
+    assert.match(html, /\.cap \{[^}]*z-index: 6/, theme);
+    assert.ok((html.match(/class="scene clip m-cutout/g) ?? []).length === scenes.length, theme);
+    assert.ok(!/id="talk"/.test(html), `${theme} still has the stage video`);
+  }
+});

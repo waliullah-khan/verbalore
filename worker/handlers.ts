@@ -3,7 +3,10 @@ import { generateIdeas, saveIdeas } from "../src/lib/ideas/generate";
 import { isUseCase } from "../src/lib/usecases";
 import { scanWorkspace } from "../src/lib/signals/engine";
 import { publishVideo } from "./publish";
-import { renderVideo } from "./render";
+import { prepareVideo } from "./prepare";
+import { finalizeVideo } from "./finalize";
+import { runWriteScript } from "../src/lib/scripts/job";
+import { onboardWorkspace } from "./onboard";
 
 export type Job = { id: string; workspace_id: string | null; kind: string; payload: Record<string, any>; attempts: number }; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -19,8 +22,13 @@ export const handlers: Record<string, Handler> = {
     return { ideas: ideas.length, useCase, notes, timings };
   },
 
+  // an edit is made in two stages: this one prepares it (plan, words, cut-out) and queues render_final, which renders it
   async render_video(db, job) {
-    return renderVideo(db, job.payload.videoId);
+    return prepareVideo(db, job.payload.videoId, job.payload.pool ?? null);
+  },
+
+  async render_final(db, job) {
+    return finalizeVideo(db, job.payload.videoId);
   },
 
   async scan_signals(db, job) {
@@ -30,7 +38,18 @@ export const handlers: Record<string, Handler> = {
   async publish_video(db, job) {
     return publishVideo(db, job.payload.publishId);
   },
+
+  async write_script(db, job) {
+    return runWriteScript(db, job.payload as Parameters<typeof runWriteScript>[1]);
+  },
+
+  async onboard_workspace(db, job) {
+    return onboardWorkspace(db, job);
+  },
 };
 
-export const RENDER_KINDS = ["render_video", "render_note"];
+// Which lane runs what: preparing is mostly waiting on other services (many at once), rendering needs the CPU.
+export const PREPARE_KINDS = ["render_video"];
+export const FINAL_KINDS = ["render_final"];
+export const RENDER_KINDS = [...PREPARE_KINDS, "render_note", ...FINAL_KINDS];
 export const GENERAL_KINDS = Object.keys(handlers).filter((k) => !RENDER_KINDS.includes(k));

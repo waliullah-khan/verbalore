@@ -2,97 +2,31 @@
 @tailwind components;
 @tailwind utilities;
 
-/* A calm studio: cool paper, ink, one orange accent, large type. Text size and appearance are the viewer's to set. */
+/* The page wrapper the artifact is published in. studio.css loads after this and builds on it. */
+:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}
+img{max-width:100%}
+[hidden]:not([hidden=until-found i]){display:none!important}
+
+/* The Studio Lot stylesheet (studio.css) is the design. This file only keeps the older pages that have
+   not been rebuilt on it yet working, by mapping their names onto the same tokens. */
 :root {
-  --scale: 1;
-  --paper: #f3f5f8;
-  --paper-2: #e9edf3;
-  --card: #ffffff;
-  --ink: #0f1a2b;
-  --ink-2: #44505f;
-  --line: #cfd6e0;
-  --accent: #c2410c;
-  --accent-ink: #ffffff;
-  --accent-soft: #fde8dc;
-  --ok: #0b6b45;
-  --ok-soft: #dcf3e8;
-  --warn: #9a3412;
-  --focus: #1d4ed8;
-  --shadow: 0 1px 2px rgba(15, 26, 43, 0.08), 0 8px 24px rgba(15, 26, 43, 0.06);
-  --r: 1rem;
-  --r2: 0.75rem;
+  --paper: var(--bg);
+  --paper-2: var(--surf2);
+  --card: var(--surf);
+  --ink-2: var(--ink2);
+  --accent: var(--acc);
+  --accent-soft: var(--acc-soft);
 }
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --paper: #0c1118;
-    --paper-2: #1e2733;
-    --card: #151c26;
-    --ink: #f1f4f8;
-    --ink-2: #b3bfcc;
-    --line: #2e3946;
-    --accent: #fb923c;
-    --accent-ink: #1a0f08;
-    --accent-soft: #3a2314;
-    --ok: #5fd7a1;
-    --ok-soft: #12332a;
-    --warn: #fdba74;
-    --focus: #8fb4ff;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.3);
-    color-scheme: dark;
-  }
-}
-
-:root[data-theme="dark"] {
-  --paper: #0c1118;
-  --paper-2: #1e2733;
-  --card: #151c26;
-  --ink: #f1f4f8;
-  --ink-2: #b3bfcc;
-  --line: #2e3946;
-  --accent: #fb923c;
-  --accent-ink: #1a0f08;
-  --accent-soft: #3a2314;
-  --ok: #5fd7a1;
-  --ok-soft: #12332a;
-  --warn: #fdba74;
-  --focus: #8fb4ff;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.3);
-  color-scheme: dark;
-}
-
-html { font-size: calc(18px * var(--scale)); }
-html, body { background: var(--paper); color: var(--ink); }
-body { font-family: var(--font-body), system-ui, sans-serif; line-height: 1.55; -webkit-font-smoothing: antialiased; }
-h1, h2, h3, .display { font-family: var(--font-display), system-ui, sans-serif; font-weight: 800; line-height: 1.1; letter-spacing: -0.01em; text-wrap: balance; }
-.mono { font-family: var(--font-mono), ui-monospace, monospace; font-variant-numeric: tabular-nums; }
-:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-
-@layer components {
-  .card { border: 1px solid var(--line); border-radius: var(--r); padding: 1.25rem; background: var(--card); box-shadow: var(--shadow); }
-  .btn {
-    display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
-    min-height: 2.75rem; padding: 0.5rem 1.15rem; border: 2px solid var(--ink); border-radius: var(--r2);
-    background: var(--card); color: var(--ink); font-size: 0.95rem; font-weight: 700; cursor: pointer;
-    transition: transform 0.1s, background 0.15s, filter 0.15s;
-  }
-  .btn:hover { background: var(--paper-2); }
-  .btn:active { transform: translateY(1px); }
-  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-  .btn-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-  .btn-primary:hover { background: var(--accent); filter: brightness(1.08); }
-  .btn-ghost { border-color: var(--line); background: transparent; }
-  .btn-danger { border-color: var(--warn); color: var(--warn); background: transparent; }
-  .chip { display: inline-flex; align-items: center; border-radius: 99px; padding: 0.1rem 0.7rem; font-size: 0.8rem; font-weight: 700; background: var(--paper-2); color: var(--ink-2); border: 1px solid var(--line); }
-  .muted { color: var(--ink-2); }
-  .field { width: 100%; min-height: 3rem; border: 2px solid var(--line); border-radius: var(--r2); padding: 0.55rem 0.8rem; background: var(--card); color: var(--ink); font-size: 0.95rem; outline: none; }
-  .field:focus { border-color: var(--accent); }
-  textarea.field { min-height: 6rem; resize: vertical; }
-  .label { display: block; margin-bottom: 0.3rem; font-size: 0.9rem; font-weight: 700; }
-  .eyebrow { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: var(--accent); }
-  .seg { display: inline-flex; flex-wrap: wrap; gap: 0.35rem; }
-  .seg button { min-height: 2.5rem; padding: 0.3rem 0.9rem; border: 2px solid var(--line); border-radius: var(--r2); background: var(--card); font-weight: 700; cursor: pointer; }
-  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
-}
-
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+.display { font-family: var(--display); font-weight: 800; line-height: 1.1; letter-spacing: -.01em; }
+.eyebrow { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; color: var(--acc); }
+.label { display: block; margin-bottom: .3rem; font-size: .9rem; font-weight: 700; }
+:not(.spot) > .chip { display: inline-flex; align-items: center; border-radius: 99px; padding: .1rem .7rem; font-size: .8rem; font-weight: 700; background: var(--surf2); color: var(--ink2); border: 1px solid var(--line); }
+.btn-primary { background: var(--acc); border-color: var(--acc); color: var(--acc-ink); }
+.btn-primary:hover { background: var(--acc); filter: brightness(1.08); }
+.btn-ghost { border-color: var(--line); background: transparent; }
+.btn-danger { border-color: var(--warn); color: var(--warn); background: transparent; }
+.lf { width: 100%; min-height: 3rem; border: 2px solid var(--line); border-radius: var(--r2); padding: .55rem .8rem; background: var(--surf); color: var(--ink); font-size: .95rem; outline: none; }
+.lf:focus { border-color: var(--acc); }
+textarea.lf { min-height: 6rem; resize: vertical; }

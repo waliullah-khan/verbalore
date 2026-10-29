@@ -83,3 +83,17 @@ export async function status(requestId: string): Promise<UploadStatus> {
   const body = await json<{ status?: string; results?: UploadStatus["results"]; completed?: number; total?: number }>(res);
   return { status: body.status ?? "processing", results: body.results ?? {} };
 }
+
+// The connected accounts of a profile with the name each one shows, for example { linkedin: "Priya Raman" }.
+export async function connectedAccounts(username: string): Promise<Record<string, string>> {
+  const res = await fetch(`${BASE}/uploadposts/users/${encodeURIComponent(username)}`, { headers: headers(), cache: "no-store" });
+  if (!res.ok) return {};
+  const body = (await res.json().catch(() => ({}))) as { profile?: { social_accounts?: Record<string, unknown> } };
+  const out: Record<string, string> = {};
+  for (const [platform, v] of Object.entries(body.profile?.social_accounts ?? {})) {
+    if (!v) continue;
+    const o = typeof v === "object" ? (v as { display_name?: string; username?: string }) : null;
+    out[platform] = (o?.display_name || o?.username || "").trim() || "connected";
+  }
+  return out;
+}
