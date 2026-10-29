@@ -12,7 +12,7 @@ export default function Home() {
     <main className="mx-auto max-w-5xl px-5 pb-24 pt-10 sm:px-8">
       <nav className="flex items-center justify-between">
         <span className="display text-xl">Verbalore</span>
-        <Link href="/login" className="btn btn-ghost">Sign in</Link>
+        <Link href="/login" className="btn btn-ghost">Request access</Link>
       </nav>
 
       <section className="pt-20 sm:pt-28">
@@ -26,7 +26,7 @@ export default function Home() {
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
           <Link href="/demo" className="btn btn-primary">Open the demo workspace</Link>
-          <Link href="/login" className="btn btn-ghost">Sign in</Link>
+          <Link href="/login" className="btn btn-ghost">Request access</Link>
         </div>
       </section>
 

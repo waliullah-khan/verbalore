@@ -51,3 +51,5 @@ next-env.d.ts
 # editor
 .vscode
 .idea
+
+.dev-*.log

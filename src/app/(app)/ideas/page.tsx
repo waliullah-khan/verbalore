@@ -39,7 +39,7 @@ export default async function Ideas({ searchParams }: { searchParams: { uc?: str
       <AutoRefresh active={allRunning.length > 0} />
       <JobNotice kinds={["generate_ideas"]} />
 
-      <ScrollActive className="-mx-5 flex gap-1 overflow-x-auto px-5 pb-2 sm:mx-0 sm:px-0" label="Use case">
+      <ScrollActive className="-mx-4 flex gap-1 overflow-x-auto px-4 pb-2 md:mx-0 md:flex-wrap md:overflow-visible md:px-0" label="Use case">
         {PLAYBOOKS.map((p) => (
           <Link
             key={p.id}
@@ -94,7 +94,7 @@ export default async function Ideas({ searchParams }: { searchParams: { uc?: str
         ))}
         {!ideas?.length && !running.length && (
           <div className="card text-center">
-            <p className="display text-xl">No {pb.label.toLowerCase()} ideas yet</p>
+            <p className="display text-xl">No ideas for {pb.label} yet</p>
             <p className="muted mt-1 text-sm">Press “Find new ideas”. The research runs in the background and takes about a minute.</p>
           </div>
         )}
