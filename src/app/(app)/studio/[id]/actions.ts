@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { enqueue } from "@/lib/jobs";
 import { currentWorkspace } from "@/lib/workspace";
 
-export async function submitRecording(input: { ideaId: string; path: string; durationS: number; template: string }) {
+export async function submitRecording(input: { ideaId: string; path: string; durationS: number; template: string; noteId?: string }) {
   const { db, ws } = await currentWorkspace();
   if (!input.path.startsWith(`${ws.id}/`)) throw new Error("bad path");
 
@@ -31,5 +31,5 @@ export async function submitRecording(input: { ideaId: string; path: string; dur
   if (vErr) throw vErr;
 
   await enqueue(db, ws.id, "render_video", { videoId: video.id });
-  redirect("/library");
+  redirect(input.noteId ? `/signals/note/${input.noteId}` : "/library");
 }

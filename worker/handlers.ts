@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { generateIdeas, saveIdeas } from "../src/lib/ideas/generate";
 import { isUseCase } from "../src/lib/usecases";
+import { scanWorkspace } from "../src/lib/signals/engine";
 import { publishVideo } from "./publish";
 import { renderVideo } from "./render";
 
@@ -20,6 +21,10 @@ export const handlers: Record<string, Handler> = {
 
   async render_video(db, job) {
     return renderVideo(db, job.payload.videoId);
+  },
+
+  async scan_signals(db, job) {
+    return scanWorkspace(db, job.workspace_id as string, job.payload.accountIds);
   },
 
   async publish_video(db, job) {

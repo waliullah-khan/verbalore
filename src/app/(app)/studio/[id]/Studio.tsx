@@ -10,7 +10,7 @@ type Phase = "setup" | "countdown" | "recording" | "review" | "uploading";
 
 type ThemeOption = { id: string; label: string; blurb: string };
 
-export default function Studio({ ideaId, workspaceId, title, beats, themes }: { ideaId: string; workspaceId: string; title: string; beats: Beat[]; themes: ThemeOption[] }) {
+export default function Studio({ ideaId, workspaceId, title, beats, themes, noteId }: { ideaId: string; workspaceId: string; title: string; beats: Beat[]; themes: ThemeOption[]; noteId?: string }) {
   const [phase, setPhase] = useState<Phase>("setup");
   const [count, setCount] = useState(3);
   const [speed, setSpeed] = useState(5);
@@ -111,7 +111,7 @@ export default function Studio({ ideaId, workspaceId, title, beats, themes }: { 
     setPhase("recording");
   }
 
-  async function useTake(blob: Blob, seconds: number) {
+  async function confirmTake(blob: Blob, seconds: number) {
     setPhase("uploading");
     setError("");
     const ext = blob.type.includes("mp4") ? "mp4" : blob.type.includes("quicktime") ? "mov" : "webm";
@@ -122,7 +122,7 @@ export default function Studio({ ideaId, workspaceId, title, beats, themes }: { 
       setPhase("review");
       return;
     }
-    await submitRecording({ ideaId, path, durationS: seconds, template });
+    await submitRecording({ ideaId, path, durationS: seconds, template, noteId });
   }
 
   async function onFile(file: File | undefined) {
@@ -186,7 +186,7 @@ export default function Studio({ ideaId, workspaceId, title, beats, themes }: { 
               )}
               {phase === "review" && take && (
                 <>
-                  <button className="btn btn-primary" onClick={() => useTake(take.blob, take.seconds)}>Use this take</button>
+                  <button className="btn btn-primary" onClick={() => confirmTake(take.blob, take.seconds)}>Use this take</button>
                   <button className="btn btn-ghost" onClick={() => { setTake(null); setPhase("setup"); openCamera(); }}>Retake</button>
                 </>
               )}

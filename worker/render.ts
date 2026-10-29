@@ -9,7 +9,9 @@ import { planScenes, wordsFromText, type Word } from "./plan";
 
 function run(cmd: string, args: string[], cwd?: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const p = spawn(cmd, args, { cwd, shell: process.platform === "win32" && cmd === "npx" });
+    // .cmd shims need a shell on Windows, and the project path contains spaces, so quote it
+    const shell = process.platform === "win32" && cmd.endsWith(".cmd");
+    const p = spawn(shell ? `"${cmd}"` : cmd, args, { cwd, shell });
     let out = "";
     p.stdout.on("data", (d) => (out += d));
     p.stderr.on("data", (d) => (out += d));
@@ -62,16 +64,23 @@ export async function transcribe(video: string, scriptText: string, secs: number
   return { words: wordsFromText(scriptText, secs), via: "script" };
 }
 
-const hyperframes = () =>
-  process.env.HYPERFRAMES_BIN ? { cmd: process.env.HYPERFRAMES_BIN, pre: [] as string[] } : { cmd: "npx", pre: ["--yes", "hyperframes@0.8.216"] };
+// hyperframes is a dev dependency; the render runs in a temp folder, so the binary is addressed absolutely.
+const hyperframes = () => ({
+  cmd: process.env.HYPERFRAMES_BIN ?? path.join(process.cwd(), "node_modules", ".bin", process.platform === "win32" ? "hyperframes.cmd" : "hyperframes"),
+  pre: [] as string[],
+});
 
 export async function renderComposition(dir: string, out: string) {
   const { cmd, pre } = hyperframes();
-  await run(cmd, [...pre, "render", "--fps", process.env.RENDER_FPS ?? "24", "--quiet", "-o", out], dir);
+  // CRF 24 is plenty for a phone screen and keeps the file near 8 MB, which matters for upload time
+  await run(cmd, [...pre, "render", "--fps", process.env.RENDER_FPS ?? "24", "--crf", process.env.RENDER_CRF ?? "24", "--quiet", "-o", out], dir);
 }
 
 export async function renderVideo(db: SupabaseClient, videoId: string) {
   const t0 = Date.now();
+  const timings: Record<string, number> = {};
+  let mark = t0;
+  const lap = (name: string) => { timings[name] = Date.now() - mark; mark = Date.now(); };
   const { data: video } = await db.from("vl_videos").select("*").eq("id", videoId).single();
   if (!video) throw new Error("video not found");
   await db.from("vl_videos").update({ status: "processing", error: null }).eq("id", videoId);
@@ -90,13 +99,16 @@ export async function renderVideo(db: SupabaseClient, videoId: string) {
     const dl = await db.storage.from("vl-recordings").download(rec.path);
     if (dl.error || !dl.data) throw new Error(`download failed: ${dl.error?.message}`);
     await writeFile(raw, Buffer.from(await dl.data.arrayBuffer()));
+    lap("download");
 
     const talk = path.join(dir, "assets", "talk.mp4");
     await normalise(raw, talk);
     const secs = Math.min(await duration(talk), 90);
+    lap("normalise");
 
     const scriptText = (idea?.script?.beats ?? []).map((b: { text: string }) => b.text).join(" ");
     const { words, via } = await transcribe(talk, scriptText || "Your video", secs);
+    lap("transcribe");
     const { scenes, via: planVia } = await planScenes(words, secs, isUseCase(video.use_case) ? video.use_case : "general");
 
     const html = composeHtml({
@@ -105,19 +117,25 @@ export async function renderVideo(db: SupabaseClient, videoId: string) {
     });
     await writeFile(path.join(dir, "index.html"), html);
 
+    lap("plan");
     const out = path.join(dir, "out.mp4");
     await renderComposition(dir, out);
+    lap("render");
 
     const objectPath = `${video.workspace_id}/${videoId}.mp4`;
     const up = await db.storage.from("vl-videos").upload(objectPath, await readFile(out), { contentType: "video/mp4", upsert: true });
     if (up.error) throw new Error(`upload failed: ${up.error.message}`);
+    lap("upload");
 
     const renderMs = Date.now() - t0;
     await db.from("vl_videos").update({
       status: "ready", output_path: objectPath, duration_s: secs, render_ms: renderMs,
-      scene_plan: scenes, transcript: { via, planVia, words: words.length },
+      scene_plan: scenes, transcript: { via, planVia, words: words.length, timings },
     }).eq("id", videoId);
-    return { renderMs, scenes: scenes.length, via, planVia };
+    if (video.idea_id) {
+      await db.from("vl_video_notes").update({ video_id: videoId, status: "ready" }).eq("idea_id", video.idea_id).is("video_id", null);
+    }
+    return { renderMs, scenes: scenes.length, via, planVia, timings };
   } catch (err) {
     await db.from("vl_videos").update({ status: "failed", error: (err as Error).message.slice(0, 500) }).eq("id", videoId);
     throw err;
