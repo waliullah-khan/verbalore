@@ -51,6 +51,9 @@ export default async function IdeaPage({ params }: { params: { id: string } }) {
         <div className="flex items-center justify-between">
           <p className="eyebrow">Your script · about {idea.script.totalSeconds}s</p>
         </div>
+        <p className="muted mt-1 text-sm">
+          Drafted from the sources below. Before you record, check each number and claim against them, and cut anything that is not true for you.
+        </p>
         <form action={saveScript} className="mt-3 space-y-3">
           <input type="hidden" name="id" value={idea.id} />
           {idea.script.beats.map((b, i) => (
