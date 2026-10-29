@@ -1,5 +1,6 @@
 import { revalidatePath } from "next/cache";
 import AutoRefresh from "@/components/AutoRefresh";
+import JobNotice from "@/components/JobNotice";
 import { enqueue } from "@/lib/jobs";
 import { currentWorkspace } from "@/lib/workspace";
 import { PLATFORMS, hasUploadPost } from "@/lib/publish/uploadpost";
@@ -55,6 +56,7 @@ export default async function Library() {
   return (
     <div>
       <AutoRefresh active={busy} />
+      <JobNotice kinds={["render_video", "publish_video"]} />
       <p className="eyebrow">Library</p>
       <h1 className="mt-1 text-4xl">Your videos</h1>
       <p className="muted mt-2 max-w-xl">Finished edits, ready to post. A 45 second video renders in about two minutes.</p>

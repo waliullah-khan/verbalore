@@ -1,4 +1,5 @@
 import AutoRefresh from "@/components/AutoRefresh";
+import JobNotice from "@/components/JobNotice";
 import { activeJobs } from "@/lib/jobs";
 import { currentWorkspace } from "@/lib/workspace";
 import { SOURCE_LABEL, isPrimary, type Source } from "@/lib/signals/sources/types";
@@ -43,6 +44,7 @@ export default async function Signals({ searchParams }: { searchParams: { added?
   return (
     <div>
       <AutoRefresh active={running.length > 0} />
+      <JobNotice kinds={["scan_signals"]} />
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="eyebrow">Account-based</p>

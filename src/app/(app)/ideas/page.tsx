@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import AutoRefresh from "@/components/AutoRefresh";
+import JobNotice from "@/components/JobNotice";
 import ScrollActive from "@/components/ScrollActive";
 import { activeJobs, enqueue } from "@/lib/jobs";
 import { currentWorkspace } from "@/lib/workspace";
@@ -36,6 +37,7 @@ export default async function Ideas({ searchParams }: { searchParams: { uc?: str
   return (
     <div>
       <AutoRefresh active={allRunning.length > 0} />
+      <JobNotice kinds={["generate_ideas"]} />
 
       <ScrollActive className="-mx-5 flex gap-1 overflow-x-auto px-5 pb-2 sm:mx-0 sm:px-0" label="Use case">
         {PLAYBOOKS.map((p) => (

@@ -11,7 +11,8 @@
     "test": "tsx --test \"src/**/*.test.ts\" \"worker/**/*.test.ts\"",
     "worker": "tsx --env-file=.env.local worker/index.ts",
     "scan:secrets": "node scripts/scan-secrets.mjs",
-    "check:keys": "tsx --env-file=.env.local scripts/check-keys.ts"
+    "check:keys": "tsx --env-file=.env.local scripts/check-keys.ts",
+    "worker:prod": "tsx worker/index.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
@@ -35,5 +36,8 @@
     "tailwindcss": "^3.4.1",
     "tsx": "^4.23.15",
     "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }
