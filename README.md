@@ -7,7 +7,7 @@ Verbalore researches what your market is posting about, writes the script in you
 | | |
 |---|---|
 | Track | _Antler Agents |
-| Demo video (Loom) | _add link_ |
+| Demo video (Loom) | https://www.loom.com/share/72327614371f46ac81bfec2d437426f8 |
 | Deployed URL | https://verbalore.vercel.app |
 | Team | Wali Ullah Khan | wali@wallai.org | https://linkedin.com/in/waliullah-khan |
 
