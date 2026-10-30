@@ -306,12 +306,6 @@ export default function Landing() {
 
       <footer className="lp-foot">
         <p>Built for a hackathon. The code is public at <a href="https://github.com/waliullah-khan/verbalore">github.com/waliullah-khan/verbalore</a>.</p>
-        <div className="lp-credits">
-          <span>Method inspired by last30days-skill</span>
-          <span>Product reference: <a href="https://getpoppy.ai">Poppy</a></span>
-          <span>Pixel scenes use fun-isometric by Kelvin Adithya, <a href="https://github.com/kelvinkn17/skills">MIT licensed</a></span>
-          <span>Motion by <a href="https://gsap.com">GSAP</a></span>
-        </div>
       </footer>
 
       <div className="lp-sticky">
