@@ -30,4 +30,4 @@ export async function middleware(req: NextRequest) {
   return res;
 }
 
-export const config = { matcher: ["/((?!.*\\.(?:svg|png|jpg|ico|woff2?)$).*)"] };
+export const config = { matcher: ["/((?!.*\\.(?:svg|png|jpe?g|webp|avif|gif|ico|woff2?)$).*)"] };

@@ -2,6 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+/* The page wrapper the artifact is published in. studio.css loads after this and builds on it. */
+:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}
+img{max-width:100%}
+[hidden]:not([hidden=until-found i]){display:none!important}
+
 /* The Studio Lot stylesheet (studio.css) is the design. This file only keeps the older pages that have
    not been rebuilt on it yet working, by mapping their names onto the same tokens. */
 :root {
@@ -15,7 +22,7 @@
 .display { font-family: var(--display); font-weight: 800; line-height: 1.1; letter-spacing: -.01em; }
 .eyebrow { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; color: var(--acc); }
 .label { display: block; margin-bottom: .3rem; font-size: .9rem; font-weight: 700; }
-.chip { display: inline-flex; align-items: center; border-radius: 99px; padding: .1rem .7rem; font-size: .8rem; font-weight: 700; background: var(--surf2); color: var(--ink2); border: 1px solid var(--line); }
+:not(.spot) > .chip { display: inline-flex; align-items: center; border-radius: 99px; padding: .1rem .7rem; font-size: .8rem; font-weight: 700; background: var(--surf2); color: var(--ink2); border: 1px solid var(--line); }
 .btn-primary { background: var(--acc); border-color: var(--acc); color: var(--acc-ink); }
 .btn-primary:hover { background: var(--acc); filter: brightness(1.08); }
 .btn-ghost { border-color: var(--line); background: transparent; }

@@ -1,12 +1,16 @@
-import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import AutoRefresh from "@/components/AutoRefresh";
 import JobNotice from "@/components/JobNotice";
-import ScrollActive from "@/components/ScrollActive";
-import { GameStrip } from "@/components/GameBits";
+import IdeaBanner from "@/components/studio/IdeaBanner";
+import IdeaCards, { type IdeaCardData } from "@/components/studio/IdeaCards";
+import IdeaGreeting from "@/components/studio/IdeaGreeting";
+import IdeaTabs from "@/components/studio/IdeaTabs";
 import { activeJobs, enqueue } from "@/lib/jobs";
 import { currentWorkspace } from "@/lib/workspace";
+import { serviceClient } from "@/lib/supabase/service";
+import { loadActivity, multiplier, streaks } from "@/lib/game";
 import { PLAYBOOKS, isUseCase, playbook, THEMES } from "@/lib/usecases";
+import { STRENGTH, sentence, strengthOf } from "@/lib/ideas/strength";
 import type { Idea } from "@/lib/ideas/types";
 
 async function generate(formData: FormData) {
@@ -21,8 +25,18 @@ async function generate(formData: FormData) {
   revalidatePath("/ideas");
 }
 
+// A first name for the greeting, from what the person told us when they asked for access. Nobody is guessed at.
+async function firstName(user: { email?: string | null; user_metadata?: Record<string, unknown> }) {
+  const meta = String(user.user_metadata?.full_name ?? "").trim().split(/\s+/)[0];
+  if (meta) return meta;
+  if (!user.email) return "";
+  const svc = await serviceClient();
+  const { data } = await svc.from("vl_access_requests").select("full_name").ilike("email", user.email).maybeSingle();
+  return String(data?.full_name ?? "").trim().split(/\s+/)[0] ?? "";
+}
+
 export default async function Ideas({ searchParams }: { searchParams: { uc?: string } }) {
-  const { db, ws } = await currentWorkspace();
+  const { db, ws, user } = await currentWorkspace();
   const uc = isUseCase(searchParams.uc) ? searchParams.uc : "gtm";
   const pb = playbook(uc);
 
@@ -35,72 +49,57 @@ export default async function Ideas({ searchParams }: { searchParams: { uc?: str
   const allRunning = await activeJobs(db, ws.id, ["generate_ideas"]);
   const running = allRunning.filter((j) => (j.payload as { useCase?: string }).useCase === uc);
 
+  const [name, activity] = await Promise.all([firstName(user), loadActivity(db, ws.id)]);
+  const streak = streaks(activity.videoTimes);
+
+  const cards: IdeaCardData[] = ((ideas ?? []) as (Idea & { id: string })[]).map((idea) => {
+    const str = strengthOf(idea.score);
+    return {
+      id: idea.id,
+      hook: idea.hook,
+      why: sentence(idea.why_now),
+      str,
+      label: STRENGTH[str].label,
+      rar: STRENGTH[str].rar,
+      hit: Math.round(STRENGTH[str].atk * multiplier(streak.current + 1)),
+      fmt: idea.script.method,
+      seconds: idea.script.totalSeconds,
+      src: idea.evidence.length,
+      lines: idea.script.beats.map((b) => b.text),
+      sample: idea.evidence.some((e) => e.synthetic),
+    };
+  });
+
   return (
-    <div>
+    <section className="screen" data-screen="today">
       <AutoRefresh active={allRunning.length > 0} />
       <JobNotice kinds={["generate_ideas"]} />
-      <GameStrip db={db} workspaceId={ws.id} />
+      <IdeaBanner />
+      <IdeaGreeting name={name} posted={streak.postedToday} />
 
-      <ScrollActive className="-mx-4 flex gap-1 overflow-x-auto px-4 pb-2 md:mx-0 md:flex-wrap md:overflow-visible md:px-0" label="Use case">
-        {PLAYBOOKS.map((p) => (
-          <Link
-            key={p.id}
-            href={`/ideas?uc=${p.id}`}
-            role="tab"
-            aria-selected={p.id === uc}
-            className={`shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-sm transition ${p.id === uc ? "bg-[var(--ink)] text-[var(--paper)]" : "hover:bg-[var(--paper-2)]"}`}
-          >
-            {p.label}
-          </Link>
+      <IdeaTabs items={PLAYBOOKS.map((p) => ({ id: p.id, label: p.label }))} current={uc} />
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: ".5rem", alignItems: "center", marginBottom: "1.25rem" }}>
+        {pb.formats.map((f) => (
+          <span key={f.name} className="pill" title={f.pattern}>{f.name}</span>
         ))}
-      </ScrollActive>
-
-      <div className="mt-6 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="eyebrow">{latest ? new Date(latest.day + "T12:00:00").toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" }) : "Today"}</p>
-          <h1 className="mt-1 text-4xl">{pb.label}</h1>
-          <p className="muted mt-2 max-w-xl">{pb.tagline}</p>
-        </div>
-        <form action={generate}>
+        <span className="pill acc">Edits: {pb.themes.map((t) => THEMES[t].label).join(" · ")}</span>
+        <form action={generate} style={{ marginLeft: "auto" }}>
           <input type="hidden" name="uc" value={uc} />
-          <button className="btn btn-primary" disabled={running.length > 0}>{running.length ? "Researching…" : "Find new ideas"}</button>
+          <button className="btn primary" disabled={running.length > 0}>{running.length ? "Researching…" : "Find new ideas"}</button>
         </form>
       </div>
 
-      <div className="mt-5 flex flex-wrap gap-2">
-        {pb.formats.map((f) => (
-          <span key={f.name} className="chip" title={f.pattern}>{f.name}</span>
-        ))}
-        <span className="chip" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>
-          Edits: {pb.themes.map((t) => THEMES[t].label).join(" · ")}
-        </span>
-      </div>
-
-      <div className="mt-8 grid gap-4">
-        {(ideas as (Idea & { id: string })[] | null)?.map((idea) => (
-          <Link key={idea.id} href={`/ideas/${idea.id}`} className="card block transition hover:-translate-y-0.5">
-            <div className="flex items-start justify-between gap-4">
-              <h2 className="text-xl leading-snug">{idea.hook}</h2>
-              <span className="chip shrink-0">{idea.score}</span>
-            </div>
-            <p className="muted mt-2 text-sm">{idea.why_now}</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <span className="chip">{idea.script.method}</span>
-              {Array.from(new Set(idea.evidence.map((e) => e.platform))).map((p) => (
-                <span key={p} className="chip">{p}</span>
-              ))}
-              <span className="chip">{idea.script.totalSeconds}s</span>
-              {idea.evidence.some((e) => e.synthetic) && <span className="chip">sample data</span>}
-            </div>
-          </Link>
-        ))}
-        {!ideas?.length && !running.length && (
-          <div className="card text-center">
-            <p className="display text-xl">No ideas for {pb.label} yet</p>
-            <p className="muted mt-1 text-sm">Press “Find new ideas”. The research runs in the background and takes about a minute.</p>
+      {cards.length > 0 ? (
+        <IdeaCards cards={cards} />
+      ) : (
+        !running.length && (
+          <div className="card" style={{ textAlign: "center" }}>
+            <h3>No ideas for {pb.label} yet</h3>
+            <p className="muted" style={{ marginTop: ".4rem" }}>{pb.tagline} Press “Find new ideas”. The research runs in the background and takes about a minute.</p>
           </div>
-        )}
-      </div>
-    </div>
+        )
+      )}
+    </section>
   );
 }

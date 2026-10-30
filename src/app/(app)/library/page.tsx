@@ -1,154 +1,105 @@
-import { revalidatePath } from "next/cache";
 import AutoRefresh from "@/components/AutoRefresh";
 import JobNotice from "@/components/JobNotice";
-import { enqueue } from "@/lib/jobs";
+import LibraryView from "@/components/studio/LibraryView";
 import { currentWorkspace } from "@/lib/workspace";
-import { PLATFORMS, hasUploadPost } from "@/lib/publish/uploadpost";
-import { THEMES, type ThemeId } from "@/lib/usecases";
+import { platformName } from "@/lib/publish/platforms";
+import type { InboxItem, LibItem, LibResult } from "./types";
 
-async function post(formData: FormData) {
-  "use server";
-  const { db, ws } = await currentWorkspace();
-  const videoId = String(formData.get("video"));
-  const platforms = formData.getAll("platform").map(String);
-  if (!platforms.length) return;
-  const when = String(formData.get("when") ?? "");
-  const { data: pub, error } = await db
-    .from("vl_publish_jobs")
-    .insert({
-      workspace_id: ws.id,
-      video_id: videoId,
-      platforms,
-      captions: { all: String(formData.get("caption") ?? "").trim() },
-      scheduled_at: when ? new Date(when).toISOString() : null,
-    })
-    .select("id")
-    .single();
-  if (error) throw error;
-  await enqueue(db, ws.id, "publish_video", { publishId: pub.id });
-  revalidatePath("/library");
-}
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 
-async function rerender(formData: FormData) {
-  "use server";
-  const { db, ws } = await currentWorkspace();
-  const videoId = String(formData.get("video"));
-  const template = String(formData.get("template"));
-  await db.from("vl_videos").update({ status: "queued", template, error: null }).eq("id", videoId);
-  await enqueue(db, ws.id, "render_video", { videoId });
-  revalidatePath("/library");
-}
+type Pub = { id: string; video_id: string; platforms: string[]; status: string; scheduled_at: string | null; results: Record<string, { success?: boolean; url?: string }> | null; created_at: string };
 
-const statusLabel: Record<string, string> = {
-  queued: "Waiting for the editor", processing: "Editing", ready: "Ready", failed: "Failed",
-  publishing: "Posting", published: "Posted", scheduled: "Scheduled", simulated: "Simulated", partial: "Partly posted",
-};
+const PILL: Record<string, string> = { posted: "Posted", draft: "Draft", scheduled: "Scheduled" };
 
 export default async function Library() {
   const { db, ws } = await currentWorkspace();
-  const { data: videos } = await db.from("vl_videos").select("*").eq("workspace_id", ws.id).order("created_at", { ascending: false });
-  const { data: pubs } = await db.from("vl_publish_jobs").select("*").eq("workspace_id", ws.id).order("created_at", { ascending: false });
+  const [{ data: videos }, { data: pubs }, { data: notes }, { data: recs }] = await Promise.all([
+    db.from("vl_videos").select("id,idea_id,recording_id,title,status,template,output_path,duration_s,error,created_at").eq("workspace_id", ws.id).order("created_at", { ascending: false }),
+    db.from("vl_publish_jobs").select("id,video_id,platforms,status,scheduled_at,results,created_at").eq("workspace_id", ws.id).order("created_at", { ascending: false }),
+    db.from("vl_video_notes").select("id,video_id,status,sent_at,created_at,token,contact:vl_crm_contacts(name)").eq("workspace_id", ws.id).order("created_at", { ascending: false }),
+    db.from("vl_recordings").select("id,idea_id,path,duration_s,created_at").eq("workspace_id", ws.id).order("created_at", { ascending: false }).limit(40),
+  ]);
+
+  const noteIds = (notes ?? []).map((n) => n.id as string);
+  const { data: views } = noteIds.length ? await db.from("vl_note_views").select("note_id").in("note_id", noteIds) : { data: [] as { note_id: string }[] };
+  const opens = new Map<string, number>();
+  (views ?? []).forEach((v) => opens.set(v.note_id, (opens.get(v.note_id) ?? 0) + 1));
+
+  const videoOf = new Map((videos ?? []).map((v) => [v.id as string, v]));
+  const noted = new Set((notes ?? []).map((n) => n.video_id as string | null).filter(Boolean) as string[]);
+  const urlOf = (path: string | null) => (path ? db.storage.from("vl-videos").getPublicUrl(path).data.publicUrl : null);
+  const base = process.env.NEXT_PUBLIC_APP_URL ?? "";
+
+  const items: LibItem[] = [];
+  for (const v of videos ?? []) {
+    if (v.status !== "ready" || noted.has(v.id as string)) continue;
+    const mine = ((pubs ?? []) as Pub[]).filter((p) => p.video_id === v.id);
+    const live = mine.find((p) => ["published", "simulated", "partial"].includes(p.status));
+    const later = mine.find((p) => p.scheduled_at && new Date(p.scheduled_at).getTime() > Date.now() && ["scheduled", "queued", "publishing"].includes(p.status));
+    const pick = live ?? later;
+    const results: LibResult[] = pick
+      ? pick.platforms.map((p) => {
+          const r = pick.results?.[p];
+          return { name: platformName(p), ok: r ? r.success !== false : pick === later ? null : true, url: r?.url };
+        })
+      : [];
+    const st = live ? "posted" : later ? "scheduled" : "draft";
+    items.push({
+      id: v.id as string, videoId: v.id as string, kind: "video", t: String(v.title), st, pill: PILL[st],
+      when: (live ? live.created_at : later ? later.scheduled_at! : v.created_at) as string,
+      whenKind: live ? "posted" : later ? "scheduled" : "made",
+      pl: pick ? pick.platforms.map(platformName) : [], results, opens: 0, len: Number(v.duration_s ?? 0), th: String(v.template),
+      videoUrl: urlOf(v.output_path as string | null), ideaId: (v.idea_id as string | null) ?? null, canRerender: !!v.recording_id, shareUrl: urlOf(v.output_path as string | null),
+    });
+  }
+  for (const n of notes ?? []) {
+    const v = n.video_id ? videoOf.get(n.video_id as string) : null;
+    if (!v || v.status !== "ready") continue;
+    const contact = (Array.isArray(n.contact) ? n.contact[0] : n.contact) as { name: string } | null;
+    items.push({
+      id: n.id as string, videoId: v.id as string, kind: "note", t: contact ? `Note to ${contact.name}` : String(v.title), st: "note",
+      pill: n.status === "sent" ? "Note sent" : "Note draft", when: (n.sent_at ?? n.created_at) as string, whenKind: n.status === "sent" ? "sent" : "made",
+      pl: ["Private link"], results: [], opens: opens.get(n.id as string) ?? 0, len: Number(v.duration_s ?? 0), th: String(v.template),
+      videoUrl: urlOf(v.output_path as string | null), ideaId: (v.idea_id as string | null) ?? null, canRerender: !!v.recording_id, shareUrl: `${base}/v/${n.token}`,
+    });
+  }
+  items.sort((a, b) => new Date(b.when).getTime() - new Date(a.when).getTime());
+
+  // recordings waiting to be edited, edits in progress, and edits that failed
+  const used = new Set((videos ?? []).map((v) => v.recording_id as string | null).filter(Boolean) as string[]);
+  const waiting = (recs ?? []).filter((r) => !used.has(r.id as string));
+  const ideaIds = [...new Set([...waiting.map((r) => r.idea_id as string | null), ...(videos ?? []).map((v) => v.idea_id as string | null)].filter(Boolean) as string[])];
+  const { data: ideas } = ideaIds.length ? await db.from("vl_ideas").select("id,hook").in("id", ideaIds) : { data: [] as { id: string; hook: string }[] };
+  const hook = new Map((ideas ?? []).map((i) => [i.id as string, String(i.hook)]));
+  const paths = waiting.map((r) => r.path as string);
+  const { data: caps } = paths.length ? await db.from("vl_capture_sessions").select("path").in("path", paths) : { data: [] as { path: string }[] };
+  const phone = new Set((caps ?? []).map((c) => c.path));
+
+  const inbox: InboxItem[] = [
+    ...(videos ?? []).filter((v) => v.status === "queued" || v.status === "processing").map((v): InboxItem => ({
+      id: v.id as string, kind: "editing", t: String(v.title), sec: Number(v.duration_s ?? 0), when: v.created_at as string, videoId: v.id as string,
+      note: v.status === "queued" ? "Waiting for the editor. This page updates by itself." : "Being edited now. Edits take a few minutes.",
+    })),
+    ...(videos ?? []).filter((v) => v.status === "failed").map((v): InboxItem => ({
+      id: v.id as string, kind: "failed", t: String(v.title), sec: Number(v.duration_s ?? 0), when: v.created_at as string, videoId: v.id as string,
+      note: String(v.error || "The edit did not finish."),
+    })),
+    ...waiting.map((r): InboxItem => ({
+      id: r.id as string, kind: "recording", t: (r.idea_id && hook.get(r.idea_id as string)) || "Untitled recording", sec: Number(r.duration_s ?? 0),
+      when: r.created_at as string, fromPhone: phone.has(r.path as string),
+    })),
+  ];
+
   const busy =
     (videos ?? []).some((v) => v.status === "queued" || v.status === "processing") ||
-    (pubs ?? []).some((p) => p.status === "queued" || p.status === "publishing");
-  const live = hasUploadPost();
+    ((pubs ?? []) as Pub[]).some((p) => p.status === "queued" || p.status === "publishing");
 
   return (
-    <div>
+    <>
       <AutoRefresh active={busy} />
       <JobNotice kinds={["render_video", "publish_video"]} />
-      <p className="eyebrow">Library</p>
-      <h1 className="mt-1 text-4xl">Your videos</h1>
-      <p className="muted mt-2 max-w-xl">Finished edits, ready to post. A 45 second video renders in about two minutes.</p>
-      {!live && <p className="chip mt-3">Posting is simulated until an Upload-Post key is set</p>}
-
-      <div className="mt-8 grid gap-5">
-        {(videos ?? []).map((v) => {
-          const url = v.output_path ? db.storage.from("vl-videos").getPublicUrl(v.output_path).data.publicUrl : null;
-          const mine = (pubs ?? []).filter((p) => p.video_id === v.id);
-          const themes = Object.keys(THEMES) as ThemeId[];
-          return (
-            <article key={v.id} className="card grid gap-5 md:grid-cols-[220px_1fr]">
-              <div className="aspect-[9/16] w-full max-w-[220px] overflow-hidden rounded-2xl bg-black">
-                {url ? <video src={url} controls playsInline preload="metadata" className="h-full w-full object-cover" /> : (
-                  <div className="flex h-full items-center justify-center p-4 text-center text-sm text-white/70">
-                    {v.status === "failed" ? "Edit failed" : "Editing…"}
-                  </div>
-                )}
-              </div>
-
-              <div className="min-w-0 space-y-4">
-                <div>
-                  <h2 className="text-xl leading-snug">{v.title}</h2>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <span className="chip">{statusLabel[v.status] ?? v.status}</span>
-                    <span className="chip">{THEMES[v.template as ThemeId]?.label ?? v.template}</span>
-                    {v.render_ms && <span className="chip">edited in {Math.round(v.render_ms / 1000)}s</span>}
-                  </div>
-                  {v.error && <p className="mt-2 text-sm" style={{ color: "var(--warn)" }}>{v.error}</p>}
-                </div>
-
-                {v.status === "ready" && (
-                  <>
-                    <details className="rounded-xl border" style={{ borderColor: "var(--line)" }}>
-                      <summary className="cursor-pointer px-4 py-3 text-sm font-medium">Post it</summary>
-                      <form action={post} className="space-y-3 px-4 pb-4">
-                        <input type="hidden" name="video" value={v.id} />
-                        <textarea name="caption" defaultValue={v.title} rows={2} className="lf" />
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-3">
-                          {PLATFORMS.map((p) => (
-                            <label key={p.id} className="flex items-center gap-2 text-sm">
-                              <input type="checkbox" name="platform" value={p.id} defaultChecked={["tiktok", "instagram", "linkedin", "youtube"].includes(p.id)} /> {p.label}
-                            </label>
-                          ))}
-                        </div>
-                        <label className="block text-sm">Schedule (optional)
-                          <input type="datetime-local" name="when" className="lf mt-1" />
-                        </label>
-                        <button className="btn btn-primary">Post to selected</button>
-                      </form>
-                    </details>
-
-                    <form action={rerender} className="flex flex-wrap items-center gap-2">
-                      <input type="hidden" name="video" value={v.id} />
-                      <select name="template" defaultValue={v.template} className="lf w-auto">
-                        {themes.map((t) => <option key={t} value={t}>{THEMES[t].label}</option>)}
-                      </select>
-                      <button className="btn btn-ghost">Re-edit in this style</button>
-                    </form>
-                  </>
-                )}
-
-                {mine.map((p) => (
-                  <div key={p.id} className="rounded-xl p-3 text-sm" style={{ background: "var(--paper-2)" }}>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="chip">{statusLabel[p.status] ?? p.status}</span>
-                      {p.scheduled_at && <span className="muted">for {new Date(p.scheduled_at).toLocaleString()}</span>}
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {(p.platforms as string[]).map((pl) => {
-                        const r = (p.results as Record<string, { success?: boolean; url?: string }> | null)?.[pl];
-                        return (
-                          <span key={pl} className="chip">
-                            {pl} {r?.success ? "✓" : r?.success === false ? "✗" : "…"}
-                            {r?.url && <a href={r.url} target="_blank" rel="noreferrer" className="ml-1 underline">view</a>}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </article>
-          );
-        })}
-        {!videos?.length && (
-          <div className="card text-center">
-            <p className="display text-xl">Nothing here yet</p>
-            <p className="muted mt-1 text-sm">Pick an idea on the Today page and record it. The edit lands here.</p>
-          </div>
-        )}
-      </div>
-    </div>
+      <LibraryView items={items} inbox={inbox} demo={ws.is_demo} />
+    </>
   );
 }

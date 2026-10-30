@@ -1,30 +1,62 @@
-import { copyFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { composeHtml, type Theme } from "../worker/compose";
-import { heuristicScene, segment, wordsFromText } from "../worker/plan";
-import { playbook, type UseCaseId } from "../src/lib/usecases";
+import { chooseSkin, heuristicScene, planScenes, segment, wordsFromText, type Word } from "../worker/plan";
+import { transcribe } from "../worker/render";
+import type { UseCaseId } from "../src/lib/usecases";
 
-const out = process.argv[2];
-const clip = process.argv[3];
+// Builds the showreel for one clip and one skin, then snapshots frames (or renders the whole thing).
+// usage: tsx scripts/try-compose.ts <work dir> <clip> <skin|auto> [snap|render] [useCase] [times]
+//   keep the work dir path short on Windows: hyperframes snapshot hits MAX_PATH under long folders
+const [work, clip, skinArg = "auto", action = "snap", useCase = "general", times] = process.argv.slice(2);
 const brand = { accent: "#c2410c", paper: "#f6f1e7", ink: "#14110f" };
+const bin = path.join(process.cwd(), "node_modules", ".bin", process.platform === "win32" ? "hyperframes.cmd" : "hyperframes");
 
-const samples: [UseCaseId, Theme, string][] = [
-  ["real_estate", "listing", "This house just hit the market and it will not last. It has 4 beds, 3 baths and 2,400 sqft. Homes here are selling 3 percent over asking right now. Message me this week to see it in person."],
-  ["developers", "terminal", "I deleted four hundred lines and the tests got faster. Run `npm i typed-queue` then call `queue.add(job)`. Use a typed queue instead of a cron job. Star the repo if this helped you."],
-  ["gtm", "product", "We booked 11 meetings from 60 notes. First spot the signal, then record thirty seconds, then send it today. Use a video note instead of a cold email. Follow for the daily play."],
-  ["c_suite", "boardroom", "Here is what I got wrong this quarter. Revenue grew 42 percent but churn rose to 6 percent. We hired too fast and I own that. The fix is simple and we start Monday."],
-  ["founders", "kinetic", "We hit 10k in monthly revenue with no ads. The best advice I ignored was to charge sooner. Charge on day one, not day ninety. Follow along as we build in public."],
-  ["general", "editorial", "Nobody tells you this about video. Three things matter, the hook, the proof and the ask. Keep every sentence short. Post it today."],
-];
+async function main() {
+  mkdirSync(path.join(work, "assets"), { recursive: true });
+  const talk = path.join(work, "assets", "talk.mp4");
+  if (!existsSync(talk)) {
+    execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-i", clip, "-vf", "fps=30,scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280", "-c:v", "libx264", "-preset", "veryfast", "-crf", "22", "-pix_fmt", "yuv420p", "-g", "30", "-c:a", "aac", "-ar", "44100", "-ac", "1", talk]);
+  }
+  const secs = Number(execFileSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", talk]).toString().trim());
 
-for (const [uc, theme, text] of samples) {
-  const dir = path.join(out, `${uc}-${theme}`);
-  mkdirSync(path.join(dir, "assets"), { recursive: true });
-  copyFileSync(clip, path.join(dir, "assets", "talk.mp4"));
-  const dur = 24;
-  const words = wordsFromText(text, dur);
-  const segs = segment(words, dur);
-  const scenes = segs.map((s, i) => heuristicScene(s, i, segs.length, playbook(uc).scenes));
-  console.log(uc, theme, scenes.map((s) => s.type).join(","));
-  writeFileSync(path.join(dir, "index.html"), composeHtml({ scenes, words, duration: dur, brand, theme, videoFile: "assets/talk.mp4", brandName: "Verbalore" }));
+  const cache = path.join(work, "words.json");
+  let words: Word[];
+  if (existsSync(cache)) words = JSON.parse(readFileSync(cache, "utf8"));
+  else {
+    const t = await transcribe(talk, "Your video", secs);
+    words = t.words.length ? t.words : wordsFromText("Your video", secs);
+    writeFileSync(cache, JSON.stringify(words));
+  }
+
+  const uc = useCase as UseCaseId;
+  const preview = segment(words, secs).map((s, i, a) => heuristicScene(s, i, a.length));
+  const skin = (skinArg === "auto" ? chooseSkin(preview, uc, work) : skinArg) as Theme;
+  const planCache = path.join(work, `plan-${skin}.json`);
+  let scenes;
+  if (existsSync(planCache)) scenes = JSON.parse(readFileSync(planCache, "utf8"));
+  else {
+    const p = await planScenes(words, secs, uc, { family: skin });
+    scenes = p.scenes;
+    writeFileSync(planCache, JSON.stringify(scenes));
+    console.log("plan via", p.via);
+  }
+  console.log(skin, `${secs.toFixed(1)}s`, `${scenes.length} beats`, scenes.map((s: { type: string }) => s.type).join(","));
+
+  writeFileSync(path.join(work, "index.html"), composeHtml({ scenes, words, duration: secs, brand, theme: skin, videoFile: "assets/talk.mp4", brandName: "Clearpath", seed: work }));
+
+  const run = (args: string[]) => {
+    const r = spawnSync(`"${bin}"`, args, { cwd: work, shell: true, encoding: "utf8" });
+    return `${r.stdout ?? ""}${r.stderr ?? ""}`;
+  };
+  if (action === "render") {
+    const t0 = Date.now();
+    const out = run(["render", "--fps", "24", "--crf", "24", ...(process.env.RENDER_WORKERS ? ["--workers", process.env.RENDER_WORKERS] : []), "--quiet", "-o", path.join(work, "out.mp4")]);
+    console.log(`render ${((Date.now() - t0) / 1000).toFixed(0)}s`, out.trim().slice(-200));
+  } else {
+    const at = times ?? scenes.map((s: { start: number }) => (s.start + 0.9).toFixed(2)).join(",");
+    console.log(run(["snapshot", "--at", at, "-o", path.join(work, "snaps")]).trim().slice(-600));
+  }
 }
+main().catch((e) => { console.error(e); process.exit(1); });

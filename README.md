@@ -158,7 +158,7 @@ That is roughly 3 to 4 times real time for the render itself, so a 45 second vid
 - `fixtures/demo-workspace.json`: Clearpath, a **fictional** company, and its brain documents, written for this project.
 - `fixtures/research.json` and `fixtures/signals.json`: **synthetic** sample posts and signals, shown with a "sample" badge and used only when a live source is unavailable.
 - Live research and signals come from the sources above at run time. Nothing scraped is stored in this repository.
-- Edit themes and script formats were designed for this project. They were informed by [awesome-opus-5-5-video-styles](https://github.com/HiAPIAI/awesome-opus-5-5-video-styles) (CC BY 4.0) and by how [Poppy](https://getpoppy.ai) turns winning content into scripts. No prompts or text were copied from either.
+- The style library in `fixtures/video-styles.json` (12 style families, 425 example prompts) is the project’s own. Edit themes and script formats were designed for this project and informed by how [Poppy](https://getpoppy.ai) turns winning content into scripts.
 
 ## Known limitations
 

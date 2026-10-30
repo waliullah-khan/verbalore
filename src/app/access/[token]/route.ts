@@ -26,5 +26,5 @@ export async function GET(req: Request, { params }: { params: { token: string } 
   if (!hash) return fail();
 
   const { error } = await supabaseServer().auth.verifyOtp({ token_hash: hash, type: "magiclink" });
-  return error ? fail() : NextResponse.redirect(`${origin}/ideas`);
+  return error ? fail() : NextResponse.redirect(`${origin}/home`);
 }

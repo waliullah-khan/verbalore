@@ -1,0 +1,13 @@
+/* Only what the Studio Lot stylesheet has no rule for. The artifact's camera is a drawn stand-in; the real one is a video. */
+.cam > video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.cam > video.live { transform: scaleX(-1); }
+.cam > .oval, .cam > .badge, .cam > .time, .cam > .meter, .cam > .count { z-index: 2; }
+.cam.review > .oval, .cam.review > .meter { display: none; }
+.cam.review > video { z-index: 1; }
+
+/* a check that did not pass keeps the same row, with a different marker */
+.checks li.no::before { content: "Check"; color: var(--warn); }
+
+.pm-codes { display: grid; gap: .4rem; }
+.pm-codes .mono { font-size: .8rem; word-break: break-all; color: var(--ink2); }
+[hidden]:not([hidden="until-found"]) { display: none !important; }

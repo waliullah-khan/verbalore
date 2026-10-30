@@ -1,0 +1,22 @@
+/* The phone's own page: the artifact's pretend phone (.dev .ph) made real and full screen. Only what the artifact has no rule for. */
+.phone-shell { position: fixed; inset: 0; background: #0b1018; color: #fff; font-size: .9rem; overflow: hidden; }
+body:has(.phone-shell)::before { display: none; }
+
+.phone-shell .ph-cam > video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+.phone-shell .ph-top { top: max(.9rem, env(safe-area-inset-top)); }
+.phone-shell .ph-script { top: calc(max(.9rem, env(safe-area-inset-top)) + 2.4rem); height: 38%; }
+.phone-shell .ph-script p { font-size: 1.3rem; }
+.phone-shell .ph-bar { padding-bottom: calc(1.1rem + env(safe-area-inset-bottom)); }
+.phone-shell .ph-recent { bottom: calc(2.9rem + env(safe-area-inset-bottom)); }
+.phone-shell .ph-card { overflow: auto; padding-bottom: calc(1.1rem + env(safe-area-inset-bottom)); }
+.phone-shell .ph-card video { width: 100%; max-height: 36dvh; border-radius: .8rem; background: #000; object-fit: contain; }
+.phone-shell .ph-list { padding-top: calc(2.6rem + env(safe-area-inset-top)); }
+.phone-shell .ph-scriptbox { max-height: 38dvh; overflow: auto; padding: .8rem 1rem; border-radius: .8rem; background: rgba(255, 255, 255, .06); }
+.phone-shell .ph-scriptbox p { font-size: 1.1rem; font-weight: 700; line-height: 1.4; margin: 0 0 .8rem; color: #fff; }
+.phone-shell .ph-error { color: #fdba74; font-weight: 700; }
+.phone-shell label.btn { cursor: pointer; }
+.phone-shell input[type="file"] { position: absolute; opacity: 0; width: 1px; height: 1px; }
+
+/* the percentage belongs inside the ring, so the ring and its label share one box */
+.phone-shell .ph-ring { position: relative; display: grid; place-items: center; }
+.phone-shell .ph-ring .pct { position: absolute; inset: 0; display: grid; place-items: center; }

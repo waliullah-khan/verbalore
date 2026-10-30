@@ -1,8 +1,11 @@
 // A use case decides what gets researched, which script formats are offered, which graphics
 // the planner reaches for, and which edit themes show up in the Studio.
 
-export type SceneType = "hook" | "stat" | "list" | "quote" | "tip" | "cta" | "code" | "compare" | "facts";
-export type ThemeId = "editorial" | "kinetic" | "product" | "listing" | "terminal" | "boardroom";
+export type SceneType = "hook" | "stat" | "list" | "quote" | "tip" | "cta" | "code" | "compare" | "facts" | "keyword" | "stack";
+export type ThemeId =
+  | "editorial" | "kinetic" | "product" | "listing" | "terminal" | "boardroom"
+  | "auto" | "typography" | "productui" | "explainer" | "generative" | "handdrawn" | "cartoon"
+  | "pixel" | "retro" | "collage" | "lowpoly" | "cinematic3d" | "photoreal";
 export type UseCaseId = "real_estate" | "developers" | "product_marketing" | "gtm" | "c_suite" | "founders" | "general";
 
 export type Playbook = {
@@ -18,13 +21,26 @@ export type Playbook = {
   themes: ThemeId[]; // the first one is the default
 };
 
-export const THEMES: Record<ThemeId, { label: string; blurb: string }> = {
+export const THEMES: Record<ThemeId, { label: string; blurb: string; family?: string }> = {
   editorial: { label: "Editorial", blurb: "Warm paper cards and serif headlines" },
   kinetic: { label: "Kinetic type", blurb: "Giant type straight on a dark frame" },
   product: { label: "Product UI", blurb: "App-window panels with a mono header" },
   listing: { label: "Listing", blurb: "Quiet luxury, big numbers, gold accents" },
   terminal: { label: "Terminal", blurb: "Code windows and monospace on near-black" },
   boardroom: { label: "Boardroom", blurb: "Restrained navy and white, KPI tiles" },
+  auto: { label: "Choose for me", blurb: "Picks the style that suits what you said", family: "auto" },
+  typography: { label: "Kinetic typography", blurb: "Giant words that snap, stretch and wipe on the beat", family: "typography" },
+  productui: { label: "Product UI", blurb: "App windows, a clicking cursor and spring motion", family: "productui" },
+  explainer: { label: "Explainer", blurb: "Axes draw on, numbers count up, labels follow", family: "explainer" },
+  generative: { label: "Generative neon", blurb: "Particles and glowing geometry on dark", family: "generative" },
+  handdrawn: { label: "Hand-drawn", blurb: "Marker lines and doodles on paper", family: "handdrawn" },
+  cartoon: { label: "Flat cartoon", blurb: "Bold outlines, bright colour, squash and stretch", family: "cartoon" },
+  pixel: { label: "Pixel art", blurb: "Chunky sprites and stepped, game-like motion", family: "pixel" },
+  retro: { label: "Retro terminal", blurb: "Green phosphor, scanlines and typed text", family: "retro" },
+  collage: { label: "Paper collage", blurb: "Cut-out paper moving in stop-motion", family: "collage" },
+  lowpoly: { label: "Low-poly", blurb: "Faceted pastel shapes that pop in", family: "lowpoly" },
+  cinematic3d: { label: "Cinematic 3D", blurb: "Depth, light sweeps and slow camera moves", family: "cinematic3d" },
+  photoreal: { label: "Film look", blurb: "Footage first, grain, warm light, restrained type", family: "photoreal" },
 };
 
 export const PLAYBOOKS: Playbook[] = [

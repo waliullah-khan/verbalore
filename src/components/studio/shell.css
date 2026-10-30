@@ -1,0 +1,7 @@
+/* The only thing the shell adds to the design's own stylesheet: the account links the design has no place for.
+   On a wide screen they sit at the foot of the rail; on a narrow one the rail is gone, so they live in the Display panel. */
+.acct { display: none; }
+.railfoot { display: flex; flex-wrap: wrap; gap: .35rem 1rem; padding: 0 .25rem; font-size: .9rem; }
+.railfoot a, .railfoot button { background: none; border: 0; padding: 0; color: var(--ink2); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.railfoot a:hover, .railfoot button:hover { color: var(--ink); }
+@container app (max-width:1000px) { .acct { display: block; } }
